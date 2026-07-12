@@ -1,0 +1,88 @@
+/**
+ * Core domain types for RecovAI.
+ *
+ * Keep this file as the single source of truth for shared shapes.
+ * Anything that mirrors a DB table should mirror its columns exactly
+ * (see docs/Development_Plan.md §1.2 for the schema).
+ */
+
+export type UserRole = 'patient' | 'doctor';
+
+/**
+ * Six-class drug taxonomy grounded in NDO 2024 national data.
+ * The system models CLASSES, never individual drugs. See
+ * docs/Development_Plan.md §1.3 before touching this — this enum is
+ * referenced by the DB enum, the risk-engine sensitivity map,
+ * kb_documents metadata filtering, and agent context.
+ */
+export type DrugClass =
+  | 'cannabis'
+  | 'synthetic_cannabinoids'
+  | 'heroin_opioids'
+  | 'stimulants'
+  | 'sedatives_benzo'
+  | 'other_polydrug';
+
+export const DRUG_CLASS_LABELS: Record<DrugClass, string> = {
+  cannabis: 'Cannabis',
+  synthetic_cannabinoids: 'Synthetic Cannabinoids / NPS',
+  heroin_opioids: 'Heroin / Opioids',
+  stimulants: 'Stimulants',
+  sedatives_benzo: 'Sedatives / Benzodiazepines',
+  other_polydrug: 'Other / Polydrug',
+};
+
+export interface Profile {
+  id: string;
+  role: UserRole;
+  fullName: string;
+  assignedDoctorId: string | null;
+  mustChangePassword: boolean;
+  archived: boolean;
+  sobrietyStartDate: string | null; // ISO date
+}
+
+export interface PatientSubstance {
+  patientId: string;
+  drugClass: DrugClass;
+  isPrimary: boolean;
+  recoveryStartDate: string; // ISO date
+}
+
+export type RiskBand = 'low' | 'medium' | 'high';
+
+export interface CheckIn {
+  id: string;
+  patientId: string;
+  date: string; // ISO date, Mauritius time (UTC+4) — see riskEngine.ts note
+  mood: number; // 1–10
+  sleep: number; // 1–10
+  craving: number; // 1–10
+  isolated: boolean;
+  steps: number;
+  riskScore: number; // 0–100
+  createdAt: string;
+}
+
+export interface RiskZone {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  lat: number;
+  lng: number;
+  radiusM: number;
+  zoneType: string;
+  classification: 'safe' | 'risk';
+  label: string;
+}
+
+export interface Alert {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  type: string;
+  urgency: 'low' | 'medium' | 'high';
+  xaiExplanation: string | null;
+  read: boolean;
+  createdAt: string;
+}
