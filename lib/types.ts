@@ -6,6 +6,12 @@
  * (see docs/Development Plan.md §1.2 for the schema).
  */
 
+// Mood scale is defined in lib/moodLevels.ts (it also carries the
+// icon/color mapping used by the journal screens) — re-exported here so
+// domain types can reference it without a second source of truth.
+import type { MoodKey } from './moodLevels';
+export type { MoodKey };
+
 export type UserRole = 'patient' | 'doctor';
 
 /**
@@ -85,4 +91,39 @@ export interface Alert {
   xaiExplanation: string | null;
   read: boolean;
   createdAt: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  patientId: string;
+  date: string; // ISO date, Mauritius time — see CheckIn note
+  moodLevel: MoodKey;
+  text: string;
+  createdAt: string;
+}
+
+export interface WeeklyReport {
+  id: string;
+  patientId: string;
+  weekStart: string; // ISO date
+  weekEnd: string; // ISO date
+  avgRisk: RiskBand;
+  compliancePercent: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  patientId: string;
+  sender: 'patient' | 'assistant';
+  text: string;
+  createdAt: string;
+  read?: boolean;
+}
+
+export interface DoctorNote {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  content: string;
+  updatedAt: string; // ISO timestamp
 }

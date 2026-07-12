@@ -44,6 +44,8 @@ docs/              Development Plan.md and other dissertation-facing design docs
 - **RLS ships with the migration that creates the table, not after.** Patients see only their own rows; doctors see only their assigned patients; `journal_entries` has no doctor policy at all. Test cross-role access with two real accounts whenever the schema changes.
 - **No live risk preview during check-in input** — the score is computed on submit only (honest self-report, not a slider users can game against a live number).
 - Build vertically, one phase at a time, per the Development Plan's milestones — not all-UI-first. Each milestone should be a demonstrable end-to-end slice.
+- **Never hardcode emoji in UI copy.** Use `@expo/vector-icons` (or a proper illustration from `assets/illustrations/`) for anything that needs a visual mark — not an emoji character embedded in a string.
+- **Check `docs/Illustrations.md` before building any icon/graphic from scratch.** The illustration library takes precedence over inline SVG or icon-library substitutes for decorative/empty-state/celebration graphics. Small functional UI icons (chevrons, search, settings, form-field icons) stay on `@expo/vector-icons`; dynamic widgets that must render live data (the risk gauge, sparklines) can't be a static illustration and stay custom SVG — but a one-off decorative graphic (success checkmark, missed-checkin state, etc.) should be a real asset from `assets/illustrations/`, not a hand-built substitute.
 
 ## Commands
 

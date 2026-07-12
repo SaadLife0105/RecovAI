@@ -36,6 +36,27 @@ export const colors = {
 
   safeZoneBg: '#F0FDF4',
   nearRiskBg: '#FFF1F2',
+
+  // Doctor-role accent (patient role uses `primary`)
+  secondary: '#2563EB',
+  secondaryBg: '#EFF6FF',
+  secondaryText: '#1D4ED8',
+
+  // "Okay" mood tier (journal) — distinct from riskMedium's orange
+  moodOkay: '#EAB308',
+  moodOkayBg: '#FEFCE8',
+  moodOkayText: '#A16207',
+
+  // Zone-type colors distinct from riskHigh/riskMedium — the zone-type
+  // grid (add-zone.tsx) needs 6 visually distinct colors, and reusing
+  // risk-band colors for zone types would conflate two different meanings.
+  zoneDrugMarket: '#991B1B',
+  zoneDrugMarketBg: '#FEF2F2',
+  zoneDrugMarketText: '#7F1D1D',
+
+  zoneFriendsHouse: '#F97316',
+  zoneFriendsHouseBg: '#FFF7ED',
+  zoneFriendsHouseText: '#C2410C',
 } as const;
 
 export const spacing = {
@@ -60,8 +81,8 @@ export function riskBand(score: number): 'low' | 'medium' | 'high' {
   return 'low';
 }
 
-export function riskBandColors(score: number) {
-  const band = riskBand(score);
+export function riskBandColors(input: number | 'low' | 'medium' | 'high') {
+  const band = typeof input === 'number' ? riskBand(input) : input;
   if (band === 'high') return { bg: colors.riskHighBg, text: colors.riskHighText, dot: colors.riskHigh };
   if (band === 'medium') return { bg: colors.riskMediumBg, text: colors.riskMediumText, dot: colors.riskMedium };
   return { bg: colors.riskLowBg, text: colors.riskLowText, dot: colors.riskLow };
