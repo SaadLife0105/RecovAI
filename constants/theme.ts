@@ -16,7 +16,7 @@ export const colors = {
   primary: '#0D9488',
   background: '#F8FAFC',
   surface: '#F1F5F9',
-  card: '#FFFFFF',
+  card: '#FDFDFD',
   divider: '#E2E8F0',
 
   textDark: '#1E293B',

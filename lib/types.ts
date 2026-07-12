@@ -3,7 +3,7 @@
  *
  * Keep this file as the single source of truth for shared shapes.
  * Anything that mirrors a DB table should mirror its columns exactly
- * (see docs/Development_Plan.md §1.2 for the schema).
+ * (see docs/Development Plan.md §1.2 for the schema).
  */
 
 export type UserRole = 'patient' | 'doctor';
@@ -11,7 +11,7 @@ export type UserRole = 'patient' | 'doctor';
 /**
  * Six-class drug taxonomy grounded in NDO 2024 national data.
  * The system models CLASSES, never individual drugs. See
- * docs/Development_Plan.md §1.3 before touching this — this enum is
+ * docs/Development Plan.md §1.3 before touching this — this enum is
  * referenced by the DB enum, the risk-engine sensitivity map,
  * kb_documents metadata filtering, and agent context.
  */
