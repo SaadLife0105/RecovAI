@@ -28,7 +28,7 @@ components/
 lib/               supabase client, risk engine, forecasting, shared TS types
 constants/         theme.ts — design tokens (colors, spacing, radius, risk-band helpers)
 assets/
-  illustrations/   hand-made illustrations/artwork used in the UI
+  illustrations/   65 hand-made illustrations — see docs/Illustrations.md for the full filename → description manifest before picking one for a screen
 supabase/
   functions/       Edge Functions (risk-agent, rag-chat, generate-xai, weekly-report)
   migrations/      versioned SQL — schema + RLS policies, written with the migration not after
