@@ -16,7 +16,7 @@ Mobile relapse-prevention companion app — 2026 BSc dissertation project. A pat
 
 ```
 app/
-  (auth)/          splash, role-select, login, forced-password-change
+  (auth)/          splash, role-select, login, register (doctor self-signup)
   (patient)/       home, check-in, history, chat, journal, profile
   (doctor)/        dashboard, patient/[id], zones/[patientId], alerts, reports, profile
 components/

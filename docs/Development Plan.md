@@ -21,7 +21,7 @@
 - [ ] Folder structure:
   ```
   app/
-    (auth)/          splash, role-select, login, forced-password-change
+    (auth)/          splash, role-select, login
     (patient)/       home, check-in, history, chat, journal, profile
     (doctor)/        dashboard, patient/[id], zones/[patientId], alerts, reports, profile
   components/        gauges, sparklines, sliders, cards, SOS button
@@ -35,7 +35,7 @@
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `profiles` | id (FK auth.users), role (patient/doctor), full_name, assigned_doctor_id, must_change_password, archived, **sobriety_start_date** | Row created via trigger on signup; sobriety date drives the "days sober" counter |
+| `profiles` | id (FK auth.users), role (patient/doctor), full_name, assigned_doctor_id, archived, **sobriety_start_date** | Row created via trigger on signup; sobriety date drives the "days sober" counter |
 | `push_tokens` | user_id, expo_push_token, platform, updated_at | Needed for doctor alerts — Expo push requires storing each device's token server-side |
 | `checkins` | patient_id, date, mood (1–10), sleep (1–10), craving (1–10), isolated (bool), steps, risk_score, created_at | Unique (patient_id, date) |
 | `patient_substances` | patient_id, drug_class (enum), is_primary (bool), recovery_start_date | **New.** A patient can have multiple rows (polydrug use is common in Mauritius). Doctor sets these at account creation; patient can view but not edit. `is_primary` marks the class the risk engine keys off |
@@ -66,9 +66,9 @@ The system does **not** model individual drugs — it models drug *classes*, gro
 This enum is referenced by `patient_substances.drug_class`, the risk-engine sensitivity map, `kb_documents.drug_class`, and the agent context. Define it before Phase 2.
 
 ### 1.4 Auth flow (Screens 1–4)
-- [ ] **Only doctors self-register via email.** Patients never sign up themselves. Doctor registers → creates patient accounts (username + temp password) → sets each patient's drug class(es) at creation → relays credentials to the patient offline
+- [ ] **Only doctors self-register via email.** Patients never sign up themselves. Doctor registers → creates patient accounts (username + password) → sets each patient's drug class(es) at creation → relays credentials to the patient offline
 - [ ] Splash → Role Select → Login (role, email/username, password) → Permissions request screen (location, motion/pedometer, notifications, health data framing)
-- [ ] **Forced password change** on first patient login; after this the patient can edit their own profile (name, address, contact) but the doctor retains ownership of clinical fields (drug class, recovery start date)
+- [ ] Patients log in directly with their doctor-assigned username and password — no forced password change gate. Patients can change their password at any time from Settings, and can edit their own profile (name, address, contact), but the doctor retains ownership of clinical fields (drug class, recovery start date)
 - [ ] Route guard in Expo Router: unauthenticated → auth stack; patient role → patient tabs; doctor role → doctor tabs
 
 **Milestone 1:** Doctor can register, create a patient with an assigned drug class, and both roles land on their home screen. Schema deployed with RLS. *(Dissertation: Design chapter — architecture diagram, ERD, security design, drug-class taxonomy.)*
@@ -143,7 +143,7 @@ The single most important vertical slice: **check-in → risk score → display*
 - [ ] Zone list view matching the mockup with radius + classification chips
 
 ### 3.5 Patient account creation + Alerts screen (Screen 13) + Doctor Profile (Screen 15)
-- [ ] Doctor creates patient with temp password (via Edge Function using the service role — the client must never hold admin keys) **and selects the patient's drug class(es) from the six-class dropdown, marking one as primary** (dropdown, never free text — keeps the data clean and analysable); patient forced to change password on first login, after which doctor loses account management but keeps metric visibility and ownership of the clinical fields (drug class, recovery start date)
+- [ ] Doctor creates patient with a password (via Edge Function using the service role — the client must never hold admin keys) **and selects the patient's drug class(es) from the six-class dropdown, marking one as primary** (dropdown, never free text — keeps the data clean and analysable); patient logs in directly with these credentials (no forced password change), and can change their own password at any time from Settings; doctor keeps metric visibility and ownership of the clinical fields (drug class, recovery start date), never account/login management
 - [ ] Alerts inbox with All/Unread/High Risk tabs; notification preference toggles in profile
 
 **Milestone 3:** Full two-sided system working with rule-driven data. *(Dissertation: Implementation — dashboard, forecasting; Design — doctor workflows.)*

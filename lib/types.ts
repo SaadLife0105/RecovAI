@@ -43,7 +43,6 @@ export interface Profile {
   role: UserRole;
   fullName: string;
   assignedDoctorId: string | null;
-  mustChangePassword: boolean;
   archived: boolean;
   sobrietyStartDate: string | null; // ISO date
 }

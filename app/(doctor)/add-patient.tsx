@@ -6,6 +6,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
+import { DrugClass, DRUG_CLASS_LABELS } from '../../lib/types';
+
+const DRUG_CLASS_ORDER: DrugClass[] = [
+  'cannabis',
+  'synthetic_cannabinoids',
+  'heroin_opioids',
+  'stimulants',
+  'sedatives_benzo',
+  'other_polydrug',
+];
 
 /** Screen 11 — Doctor Add Patient. Static UI; account creation is wired in a later phase. */
 export default function AddPatient() {
@@ -16,6 +26,22 @@ export default function AddPatient() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showTempPassword, setShowTempPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedClasses, setSelectedClasses] = useState<DrugClass[]>([]);
+  const [primaryClass, setPrimaryClass] = useState<DrugClass | null>(null);
+
+  const toggleClass = (drugClass: DrugClass) => {
+    if (!selectedClasses.includes(drugClass)) {
+      const wasEmpty = selectedClasses.length === 0;
+      setSelectedClasses([...selectedClasses, drugClass]);
+      if (wasEmpty) setPrimaryClass(drugClass);
+      return;
+    }
+    const remaining = selectedClasses.filter((c) => c !== drugClass);
+    setSelectedClasses(remaining);
+    if (primaryClass === drugClass) {
+      setPrimaryClass(remaining[0] ?? null);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -81,6 +107,48 @@ export default function AddPatient() {
             <Text className="text-sm" style={{ color: colors.textMuted }}>Select start date</Text>
             <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
           </View>
+
+          <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Drug Class</Text>
+          <Text className="mb-2 text-xs" style={{ color: colors.textMuted }}>Select one or more. Mark one as primary.</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {DRUG_CLASS_ORDER.map((drugClass) => {
+              const isSelected = selectedClasses.includes(drugClass);
+              const isPrimary = primaryClass === drugClass;
+              return (
+                <Pressable
+                  key={drugClass}
+                  onPress={() => toggleClass(drugClass)}
+                  className="w-[48%] flex-row items-center justify-center rounded-xl border px-3 py-2"
+                  style={{
+                    backgroundColor: isPrimary ? colors.primary : colors.card,
+                    borderColor: isPrimary ? colors.primary : isSelected ? colors.primary : colors.divider,
+                  }}
+                >
+                  {isPrimary && <Ionicons name="star" size={14} color="white" style={{ marginRight: 4 }} />}
+                  <Text
+                    className="text-center text-sm"
+                    style={{ color: isPrimary ? 'white' : isSelected ? colors.primary : colors.textDark }}
+                  >
+                    {DRUG_CLASS_LABELS[drugClass]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {selectedClasses.length > 1 && (
+            <View className="mt-2 flex-row flex-wrap gap-3">
+              {selectedClasses
+                .filter((c) => c !== primaryClass)
+                .map((drugClass) => (
+                  <Pressable key={drugClass} onPress={() => setPrimaryClass(drugClass)}>
+                    <Text className="text-xs font-medium" style={{ color: colors.primary }}>
+                      Make {DRUG_CLASS_LABELS[drugClass]} primary
+                    </Text>
+                  </Pressable>
+                ))}
+            </View>
+          )}
 
           <Pressable
             onPress={() => router.push('/(doctor)/dashboard')}

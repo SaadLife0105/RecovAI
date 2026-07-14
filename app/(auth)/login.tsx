@@ -4,17 +4,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
+import { supabase } from '../../lib/supabase';
 import type { UserRole } from '../../lib/types';
 
-/** Screen 3 — Login. Static UI only; no real auth wiring yet. */
+/** Screen 3 — Login. */
 export default function Login() {
   const router = useRouter();
   const { role: roleParam } = useLocalSearchParams<{ role?: string }>();
   const role: UserRole = roleParam === 'doctor' ? 'doctor' : 'patient';
 
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const authEmail =
+      role === 'doctor' ? email.trim() : `${username.trim().toLowerCase()}@patients.recovai.internal`;
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+
+    if (error || !data.user) {
+      setErrorMessage('Invalid username/email or password.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
+
+    setIsSubmitting(false);
+    router.replace(profile?.role === 'doctor' ? '/(doctor)/dashboard' : '/(patient)/home');
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -39,16 +64,33 @@ export default function Login() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </View>
 
-        <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Email</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Enter your email"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          className="rounded-xl bg-card px-4 py-3 text-text-dark"
-        />
+        {role === 'doctor' ? (
+          <>
+            <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Enter your email"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              className="rounded-xl bg-card px-4 py-3 text-text-dark"
+            />
+          </>
+        ) : (
+          <>
+            <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Username</Text>
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Enter your username"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="default"
+              className="rounded-xl bg-card px-4 py-3 text-text-dark"
+            />
+          </>
+        )}
 
         <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Password</Text>
         <View className="flex-row items-center rounded-xl bg-card px-4">
@@ -72,19 +114,34 @@ export default function Login() {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push({ pathname: '/permissions', params: { role } })}
+          onPress={handleLogin}
+          disabled={isSubmitting}
           className="mt-6 items-center rounded-2xl py-4"
-          style={{ backgroundColor: colors.primary }}
+          style={{ backgroundColor: colors.primary, opacity: isSubmitting ? 0.7 : 1 }}
         >
-          <Text className="text-base font-semibold text-white">Log In</Text>
+          <Text className="text-base font-semibold text-white">
+            {isSubmitting ? 'Logging in...' : 'Log In'}
+          </Text>
         </Pressable>
 
-        <Text className="mt-4 text-center text-sm text-text-muted">
-          Don&apos;t have an account?{' '}
-          <Text className="font-semibold" style={{ color: colors.primary }}>
-            Sign up
+        {errorMessage && (
+          <Text className="mt-3 text-center text-sm" style={{ color: colors.riskHigh }}>
+            {errorMessage}
           </Text>
-        </Text>
+        )}
+
+        {role === 'doctor' && (
+          <Text className="mt-4 text-center text-sm text-text-muted">
+            Don&apos;t have an account?{' '}
+            <Text
+              className="font-semibold"
+              style={{ color: colors.primary }}
+              onPress={() => router.push('/(auth)/register')}
+            >
+              Sign up
+            </Text>
+          </Text>
+        )}
       </View>
     </SafeAreaView>
   );

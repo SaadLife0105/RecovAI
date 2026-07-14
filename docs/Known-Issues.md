@@ -10,10 +10,23 @@ Add to this file as issues surface; remove/check off once resolved.
 
 *(none — see below if this list is empty; check back before assuming everything's done)*
 
-
+---
 
 ## Resolved
 *(move items here once fixed, with a one-line note on the fix)*
+
+- **Drug-class selection missing from `add-patient.tsx` (found during Phase 1.2 prep).**
+  A real gap vs. Milestone 1 (Development Plan.md) — `DrugClass`,
+  `DRUG_CLASS_LABELS`, and `PatientSubstance` already existed in
+  `lib/types.ts`, just never wired into any screen. Added a 6-chip
+  multi-select with one markable as primary (auto-assigned on first
+  selection, reassigned sensibly on deselect). Also removed
+  `Profile.mustChangePassword` — dead field left over from the
+  forced-password-change design already removed elsewhere (confirmed
+  zero remaining references repo-wide).
+  Still outstanding: no read-only display of a patient's assigned
+  class anywhere on the patient side yet (FR31) — noted, not yet
+  built.
 
 - **`add-patient.tsx` trivial bugs (was #3).** Start Date now shows
   "Select start date" placeholder in `colors.textMuted`; Create

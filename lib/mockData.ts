@@ -27,7 +27,6 @@ export const PATIENT_PROFILE: Profile = {
   role: 'patient',
   fullName: 'Alex Brown',
   assignedDoctorId: DOCTOR_ID,
-  mustChangePassword: false,
   archived: false,
   sobrietyStartDate: '2025-05-10',
 };
@@ -45,7 +44,6 @@ export const DOCTOR_PROFILE: DoctorProfileMock = {
   role: 'doctor',
   fullName: 'Dr. Sarah Lee',
   assignedDoctorId: null,
-  mustChangePassword: false,
   archived: false,
   sobrietyStartDate: null,
   specialty: 'Addiction Specialist',
