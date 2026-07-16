@@ -1,22 +1,68 @@
+import { useEffect, useState } from 'react';
 import { Profile } from '../types';
-import { DOCTOR_PROFILE, PATIENT_ID, PATIENT_PROFILE } from '../mockData';
+import { supabase } from '../supabase';
+import { useSession } from './useSession';
 
 export interface PatientProfileData extends Profile {
-  /** Resolved from assignedDoctorId — a real query would join or follow up; this hook hides that. */
+  /** Resolved via a follow-up query on assignedDoctorId; null if the patient has no assigned doctor. */
   assignedDoctorName: string | null;
 }
 
-export function usePatientProfile(patientId: string = PATIENT_ID): { data: PatientProfileData | null; isLoading: boolean; error: null } {
-  if (patientId !== PATIENT_PROFILE.id) {
-    return { data: null, isLoading: false, error: null };
-  }
+/** Patient's own profile, defaulting to the signed-in patient. */
+export function usePatientProfile(patientId?: string): { data: PatientProfileData | null; isLoading: boolean; error: null } {
+  const { session } = useSession();
+  const resolvedPatientId = patientId ?? session?.user.id;
 
-  return {
-    data: {
-      ...PATIENT_PROFILE,
-      assignedDoctorName: PATIENT_PROFILE.assignedDoctorId === DOCTOR_PROFILE.id ? DOCTOR_PROFILE.fullName : null,
-    },
-    isLoading: false,
-    error: null,
-  };
+  const [data, setData] = useState<PatientProfileData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!resolvedPatientId) {
+      setData(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoading(true);
+
+    (async () => {
+      const { data: row } = await supabase.from('profiles').select('*').eq('id', resolvedPatientId).single();
+      if (!isMounted) return;
+
+      if (!row) {
+        setData(null);
+        setIsLoading(false);
+        return;
+      }
+
+      let assignedDoctorName: string | null = null;
+      if (row.assigned_doctor_id) {
+        const { data: doctorRow } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', row.assigned_doctor_id)
+          .single();
+        if (!isMounted) return;
+        assignedDoctorName = doctorRow?.full_name ?? null;
+      }
+
+      setData({
+        id: row.id,
+        role: row.role,
+        fullName: row.full_name,
+        assignedDoctorId: row.assigned_doctor_id,
+        archived: row.archived,
+        sobrietyStartDate: row.sobriety_start_date,
+        assignedDoctorName,
+      });
+      setIsLoading(false);
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedPatientId]);
+
+  return { data, isLoading, error: null };
 }

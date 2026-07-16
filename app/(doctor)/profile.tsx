@@ -8,6 +8,7 @@ import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { useDoctorProfile } from '../../lib/hooks/useDoctorProfile';
 import { usePatients } from '../../lib/hooks/usePatients';
 import { formatDateLabel } from '../../lib/formatDate';
+import { supabase } from '../../lib/supabase';
 
 const PREFERENCES_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; route?: '/(doctor)/alert-preferences' | '/(doctor)/change-password'; danger?: boolean }[] = [
   { icon: 'notifications-outline', label: 'Alert Preferences', route: '/(doctor)/alert-preferences' },
@@ -61,7 +62,7 @@ export default function DoctorProfile() {
             {PREFERENCES_ROWS.map((row, i) => (
               <Pressable
                 key={row.label}
-                onPress={row.route ? () => router.push(row.route!) : undefined}
+                onPress={row.route ? () => router.push(row.route!) : row.danger ? () => supabase.auth.signOut() : undefined}
                 className="flex-row items-center px-4 py-4"
                 style={i < PREFERENCES_ROWS.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.divider } : undefined}
               >

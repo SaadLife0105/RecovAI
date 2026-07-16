@@ -15,6 +15,34 @@ const LABELS: Record<'mood' | 'sleep' | 'craving', string> = {
   craving: 'Craving',
 };
 
+// End-of-track anchors so "1" and "10" have an obvious, honest meaning —
+// mood/sleep are better-at-10, craving is worse-at-10, so the icons
+// deliberately differ in kind (mood: distinct faces) vs intensity
+// (sleep/craving: same symbol, outline vs solid) to match that.
+const LOW_ICON: Record<'mood' | 'sleep' | 'craving', keyof typeof Ionicons.glyphMap> = {
+  mood: 'sad-outline',
+  sleep: 'moon-outline',
+  craving: 'flame-outline',
+};
+
+const HIGH_ICON: Record<'mood' | 'sleep' | 'craving', keyof typeof Ionicons.glyphMap> = {
+  mood: 'happy-outline',
+  sleep: 'moon',
+  craving: 'flame',
+};
+
+const LOW_TEXT: Record<'mood' | 'sleep' | 'craving', string> = {
+  mood: 'Low mood',
+  sleep: 'Poor sleep',
+  craving: 'No urge',
+};
+
+const HIGH_TEXT: Record<'mood' | 'sleep' | 'craving', string> = {
+  mood: 'Great mood',
+  sleep: 'Great sleep',
+  craving: 'Intense urge',
+};
+
 interface RatingSliderProps {
   type: 'mood' | 'sleep' | 'craving';
   value: number;
@@ -42,6 +70,16 @@ export function RatingSlider({ type, value, onValueChange, readOnly }: RatingSli
           maximumTrackTintColor={colors.divider}
           thumbTintColor={colors.primary}
         />
+        <View className="mt-1 flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <Ionicons name={LOW_ICON[type]} size={14} color={colors.textMuted} />
+            <Text className="ml-1 text-[11px] text-text-muted">{LOW_TEXT[type]}</Text>
+          </View>
+          <View className="flex-row items-center">
+            <Text className="mr-1 text-[11px] text-text-muted">{HIGH_TEXT[type]}</Text>
+            <Ionicons name={HIGH_ICON[type]} size={14} color={colors.textMuted} />
+          </View>
+        </View>
       </View>
       <View className="ml-3 h-9 w-9 items-center justify-center rounded-full bg-surface">
         <Ionicons name={ICONS[type]} size={18} color={colors.primary} />

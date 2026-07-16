@@ -46,7 +46,8 @@
 | `chat_messages` | patient_id, role (user/assistant), content, created_at | |
 | `doctor_notes` | patient_id, doctor_id, content, created_at | |
 | `kb_documents` | content, embedding vector(N), source, category, **drug_class (nullable)** | RAG knowledge base. `drug_class` tags class-specific content (opioid overdose warnings, cannabis coping, etc.); NULL = general content applicable to all |
-| `streaks` | patient_id, current_streak, longest_streak, last_checkin_date | |
+| `streaks` | patient_id, current_streak, longest_streak, last_checkin_date | Engagement metric only — rewards consecutive check-ins, NOT sobriety. See `relapse_logs` below; the two must never be conflated |
+| `relapse_logs` | patient_id, logged_at, notes (nullable) | **New.** Patient-initiated, honest relapse logging — see the note under 2.2 below. Doctor-visible (used for Patient Detail history + a doctor alert), separate from the engagement streak |
 
 - [ ] **Row Level Security on every table from day one** — patients see only their own rows; doctors see only their assigned patients; journal is patient-only. RLS policies are a dissertation talking point (data protection for a vulnerable population), so document each policy as it's written.
 - [ ] Supabase Auth: email/password; `must_change_password` flag drives the forced-password-change flow.
@@ -102,6 +103,12 @@ The single most important vertical slice: **check-in → risk score → display*
 - [ ] Missed check-in nudge screen when app opens with no check-in today
 - [ ] One check-in per day enforced at DB level (unique constraint) and UI level
 - [ ] **Streak edge cases**: define "day" in Mauritius time (UTC+4), not UTC — otherwise a 2 a.m. check-in counts for the wrong day. Handle: missed day → streak resets to 0; same-day duplicate attempt → blocked; test the tier boundaries (2–3 days, 6–7, 364–365)
+- [ ] **Relapse logging — found missing during Phase 2 implementation, not in the original 15-screen design.** Before this, `sobriety_start_date`/`streaks` had no relapse concept at all: the engagement streak (consecutive check-ins) and "days sober" were effectively the same number, meaning a patient could report severe craving daily and their sober-days counter would climb forever regardless. Two problems with that: it's factually wrong, and it creates a perverse incentive — if logging a relapse reset the same streak that rewards showing up, patients have a real reason to hide relapses or stop checking in exactly when they need support most (a known failure mode in recovery-app design, not a hypothetical). Fix, to be built:
+  - Add an explicit "Log a Relapse" action (check-in screen and/or Home) — a real, honest, patient-initiated event, never inferred from craving/mood scores.
+  - Logging a relapse inserts a row into the new `relapse_logs` table (doctor-visible history) AND resets `profiles.sobriety_start_date` to today. It does **not** touch `streaks.current_streak` — the engagement streak stays intact, since checking in to honestly report a relapse should still count as a good, supported check-in day, not be punished.
+  - Should raise a doctor alert (likely `urgency: 'high'`, new alert `type: 'relapse_logged'`).
+  - UI copy needs the same non-judgemental, supportive tone as the rest of the app (Critical Caution #23) — this is a moment where tone matters most, not least.
+  - **Dissertation note**: Chapter 3's FR10 already correctly describes the streak as "based on consecutive check-ins" (no sobriety-conflation issue in what's written) — this is new content to add when that section is next revised, not a correction of something wrong. The app's own UI currently *does* have the conflation (multiple screens literally say "Days Sober" while showing the check-in streak number) — fix those labels as part of building this, so the app matches what the dissertation already correctly claims.
 
 ### 2.3 Patient Home (Screen 5)
 - [ ] Circular SVG risk gauge (react-native-svg arc, colour-banded)
@@ -293,6 +300,12 @@ Things that will silently break the project or the dissertation if ignored. Read
 | 9 | Reports, automation, polish |
 | 10 | Testing + demo data |
 | 11–12 | Buffer + dissertation writing surge |
+
+---
+
+## Future Work (Explicitly Not Building Now)
+
+- **Twice-daily check-ins (morning + evening).** Considered during Phase 2 implementation and deliberately deferred, not forgotten. Would require real schema/logic changes, not just a UI tweak: the `checkins` unique constraint would need a `period` dimension, the risk engine would need a merge policy for two same-day scores (average? worse-of-two? evening-weighted?), and the streak/forecaster/dashboard/agent (Phase 3 and 5) would all need to handle two data points per day instead of one. The EMA-frequency argument cuts both ways too: more frequent sampling is often more rigorous, but EMA compliance research also shows compliance drops as prompt frequency rises — a real risk in a population already prone to disengagement, potentially producing *worse* data rather than better. Kept as one check-in per day; worth citing in the dissertation's Future Work section with this reasoning rather than presenting it as unconsidered.
 
 ---
 

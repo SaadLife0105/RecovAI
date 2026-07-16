@@ -37,6 +37,17 @@ export function formatTime(iso: string): string {
   return `${hour}:${parts.minute} ${ampm}`;
 }
 
+/** Converts a real UTC timestamp into a string whose wall-clock digits reflect the DEVICE's own local timezone (not a fixed offset) — for display only, e.g. "when did I submit this". Never use this for anything that decides which calendar day something counts toward; that must stay Mauritius-fixed (see lib/mauritiusTime.ts). */
+export function toDeviceLocalIsoString(utcIso: string): string {
+  const date = new Date(utcIso);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
 /** "May 12 – May 18, 2025" — start date without a year, end date with one. */
 export function formatDateRange(startIso: string, endIso: string): string {
   const start = parseIso(startIso);

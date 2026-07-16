@@ -4,9 +4,12 @@ import { colors, riskBandColors } from '../../constants/theme';
 import { RiskRingBadge } from '../gauges/RiskRingBadge';
 
 export interface PatientRowData {
+  /** Real UUID (profiles.id) — for navigation, not display. */
+  id: string;
   name: string;
   patientId: string;
-  age: number;
+  // No birthdate/age field exists in the `profiles` schema — would need a
+  // new column to bring this back honestly.
   avatarColor: string;
   score: number | null; // null for "Pending" / "Inactive" patients
   statusLabel: string; // "High Risk", "Medium Risk", "Low Risk", "Inactive (7+ days)", "Pending"
@@ -19,7 +22,6 @@ export interface PatientRowData {
 export function PatientListRow({
   name,
   patientId,
-  age,
   avatarColor,
   score,
   statusLabel,
@@ -44,9 +46,7 @@ export function PatientListRow({
 
       <View className="ml-3 flex-1">
         <Text className="text-sm font-semibold text-text-dark">{name}</Text>
-        <Text className="mt-0.5 text-xs text-text-muted">
-          ID: {patientId} • {age} years
-        </Text>
+        <Text className="mt-0.5 text-xs text-text-muted">ID: {patientId}</Text>
       </View>
 
       <View className="items-end">

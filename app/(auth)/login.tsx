@@ -44,7 +44,7 @@ export default function Login() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 px-5 pt-4">
-        <Pressable onPress={() => router.back()} className="mb-4 h-9 w-9 items-center justify-center">
+        <Pressable onPress={() => router.replace('/(auth)/role-select')} className="mb-4 h-9 w-9 items-center justify-center">
           <Ionicons name="chevron-back" size={24} color={colors.textDark} />
         </Pressable>
 
@@ -52,7 +52,10 @@ export default function Login() {
         <Text className="mt-1 text-sm text-text-muted">Log in to your account</Text>
 
         <Text className="mb-1 mt-6 text-sm font-medium text-text-dark">Role</Text>
-        <View className="flex-row items-center rounded-xl bg-card px-4 py-3">
+        <Pressable
+          onPress={() => router.replace('/(auth)/role-select')}
+          className="flex-row items-center rounded-xl bg-card px-4 py-3"
+        >
           <Ionicons
             name={role === 'doctor' ? 'medkit-outline' : 'person-outline'}
             size={18}
@@ -62,7 +65,7 @@ export default function Login() {
             {role === 'doctor' ? 'Doctor' : 'Patient'}
           </Text>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </View>
+        </Pressable>
 
         {role === 'doctor' ? (
           <>

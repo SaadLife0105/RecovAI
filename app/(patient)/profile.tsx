@@ -10,6 +10,7 @@ import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
 import { PATIENT_PREFERENCES } from '../../lib/mockData';
+import { supabase } from '../../lib/supabase';
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -92,7 +93,7 @@ export default function PatientProfile() {
             {settingsRows.map((row, i) => (
               <Pressable
                 key={row.label}
-                onPress={row.route ? () => router.push(row.route!) : undefined}
+                onPress={row.route ? () => router.push(row.route!) : row.danger ? () => supabase.auth.signOut() : undefined}
                 className="flex-row items-center px-4 py-4"
                 style={i < settingsRows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.divider } : undefined}
               >

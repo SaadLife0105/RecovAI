@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,13 @@ import { RatingSlider } from '../../components/sliders/RatingSlider';
 import { Card } from '../../components/cards/Card';
 import { StatRow } from '../../components/cards/StatRow';
 import { SOSButton } from '../../components/sos/SOSButton';
+import { supabase } from '../../lib/supabase';
+import { useSession } from '../../lib/hooks/useSession';
+import { getMauritiusDateString } from '../../lib/mauritiusTime';
+import { formatDateLabel } from '../../lib/formatDate';
+import { computeRiskScore } from '../../lib/riskEngine';
+import { computeNextStreak, StreakState } from '../../lib/streakLogic';
+import { DrugClass } from '../../lib/types';
 
 // Mock passive data — real sensor wiring lands in Phase 2.4 (see docs/Development Plan.md)
 const MOCK_PASSIVE = { steps: 6342, zone: 'Safe Zone' };
@@ -15,10 +22,101 @@ const MOCK_PASSIVE = { steps: 6342, zone: 'Safe Zone' };
 /** Screen 6 — Daily Check-In. No live risk preview: score is computed on submit only. */
 export default function CheckIn() {
   const router = useRouter();
+  const { session } = useSession();
+  const patientId = session?.user.id;
   const [mood, setMood] = useState(6);
   const [sleep, setSleep] = useState(5);
   const [craving, setCraving] = useState(7);
   const [isolated, setIsolated] = useState<boolean | null>(false);
+  const [primaryDrugClass, setPrimaryDrugClass] = useState<DrugClass | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!patientId) return;
+    supabase
+      .from('patient_substances')
+      .select('drug_class')
+      .eq('patient_id', patientId)
+      .eq('is_primary', true)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setPrimaryDrugClass(data.drug_class);
+        else setErrorMessage('No primary drug class found for this patient.');
+      });
+  }, [patientId]);
+
+  const handleSubmit = async () => {
+    if (!patientId || !primaryDrugClass) {
+      setErrorMessage('No primary drug class found for this patient.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const today = getMauritiusDateString();
+    const nearRiskZone = MOCK_PASSIVE.zone !== 'Safe Zone';
+    const score = computeRiskScore(
+      { craving, mood, sleep, isolated: !!isolated, steps: MOCK_PASSIVE.steps, nearRiskZone },
+      primaryDrugClass
+    );
+
+    const { error: checkinError } = await supabase.from('checkins').upsert(
+      {
+        patient_id: patientId,
+        date: today,
+        mood,
+        sleep,
+        craving,
+        isolated: !!isolated,
+        steps: MOCK_PASSIVE.steps,
+        risk_score: score,
+      },
+      { onConflict: 'patient_id,date' }
+    );
+
+    if (checkinError) {
+      setErrorMessage(checkinError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: streakRow } = await supabase
+      .from('streaks')
+      .select('*')
+      .eq('patient_id', patientId)
+      .maybeSingle();
+
+    const currentState: StreakState = streakRow
+      ? {
+          currentStreak: streakRow.current_streak,
+          longestStreak: streakRow.longest_streak,
+          lastCheckinDate: streakRow.last_checkin_date,
+        }
+      : { currentStreak: 0, longestStreak: 0, lastCheckinDate: null };
+
+    const nextState = computeNextStreak(currentState, today);
+
+    const { error: streakError } = await supabase.from('streaks').upsert(
+      {
+        patient_id: patientId,
+        current_streak: nextState.currentStreak,
+        longest_streak: nextState.longestStreak,
+        last_checkin_date: nextState.lastCheckinDate,
+      },
+      { onConflict: 'patient_id' }
+    );
+
+    if (streakError) {
+      setErrorMessage(streakError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    router.replace('/checkin-success');
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -30,7 +128,7 @@ export default function CheckIn() {
             </Pressable>
             <View>
               <Text className="text-xl font-bold text-text-dark">Daily Check-In</Text>
-              <Text className="text-xs text-text-muted">May 24, 2025</Text>
+              <Text className="text-xs text-text-muted">{formatDateLabel(getMauritiusDateString())}</Text>
             </View>
           </View>
 
@@ -77,12 +175,21 @@ export default function CheckIn() {
             </Text>
           </View>
 
+          {errorMessage && (
+            <Text className="mt-4 text-center text-sm" style={{ color: colors.riskHigh }}>
+              {errorMessage}
+            </Text>
+          )}
+
           <Pressable
-            onPress={() => router.push('/checkin-success')}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
             className="mt-5 items-center rounded-2xl py-4"
-            style={{ backgroundColor: colors.primary }}
+            style={{ backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 }}
           >
-            <Text className="text-base font-semibold text-white">Submit Check-In</Text>
+            <Text className="text-base font-semibold text-white">
+              {isSubmitting ? 'Submitting...' : 'Submit Check-In'}
+            </Text>
           </Pressable>
         </ScrollView>
 

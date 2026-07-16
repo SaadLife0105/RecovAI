@@ -6,8 +6,7 @@ import { colors } from '../../constants/theme';
 import { StreakCard } from '../../components/cards/StreakCard';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
-
-const MOCK_DAYS_SOBER = 14;
+import { useStreak } from '../../lib/hooks/useStreak';
 
 // Scattered celebration dots around the success illustration — angle (deg), radius, size, color.
 const CONFETTI_DOTS: { angle: number; radius: number; size: number; color: string }[] = [
@@ -48,6 +47,7 @@ function ConfettiRing() {
 /** Screen 8 — Check-in Success. */
 export default function CheckInSuccess() {
   const router = useRouter();
+  const { data: streak } = useStreak();
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -65,7 +65,7 @@ export default function CheckInSuccess() {
           <Text className="mt-1 text-center text-sm text-text-muted">Great job staying on track today.</Text>
 
           <View className="mt-6 w-full">
-            <StreakCard days={MOCK_DAYS_SOBER} variant="card" tagline="Keep it up!" status="On Fire!" />
+            <StreakCard days={streak.currentStreak} variant="card" tagline="Keep it up!" status="On Fire!" />
           </View>
 
           <Pressable

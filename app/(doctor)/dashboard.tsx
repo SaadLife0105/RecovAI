@@ -78,9 +78,9 @@ export default function DoctorDashboard() {
           ) : (
             data.patients.map((patient) => (
               <PatientListRow
-                key={patient.name}
+                key={patient.id}
                 {...patient}
-                onPress={() => router.push({ pathname: '/(doctor)/patient/[id]', params: { id: '1' } })}
+                onPress={() => router.push({ pathname: '/(doctor)/patient/[id]', params: { id: patient.id } })}
               />
             ))
           )}

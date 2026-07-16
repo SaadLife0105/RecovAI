@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../constants/theme';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { DrugClass, DRUG_CLASS_LABELS } from '../../lib/types';
+import { formatDateLabel } from '../../lib/formatDate';
+import { supabase } from '../../lib/supabase';
 
 const DRUG_CLASS_ORDER: DrugClass[] = [
   'cannabis',
@@ -17,7 +20,7 @@ const DRUG_CLASS_ORDER: DrugClass[] = [
   'other_polydrug',
 ];
 
-/** Screen 11 — Doctor Add Patient. Static UI; account creation is wired in a later phase. */
+/** Screen 11 — Doctor Add Patient. Calls the create-patient Edge Function. */
 export default function AddPatient() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
@@ -28,6 +31,10 @@ export default function AddPatient() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedClasses, setSelectedClasses] = useState<DrugClass[]>([]);
   const [primaryClass, setPrimaryClass] = useState<DrugClass | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const toggleClass = (drugClass: DrugClass) => {
     if (!selectedClasses.includes(drugClass)) {
@@ -41,6 +48,62 @@ export default function AddPatient() {
     if (primaryClass === drugClass) {
       setPrimaryClass(remaining[0] ?? null);
     }
+  };
+
+  const validate = (): string | null => {
+    if (!fullName.trim()) return 'Full name is required';
+    if (!/^[a-z0-9_.]{3,32}$/.test(username.trim().toLowerCase())) {
+      return 'Username must be 3-32 characters: letters, numbers, underscore, or dot';
+    }
+    if (tempPassword.length < 8) return 'Password must be at least 8 characters';
+    if (tempPassword !== confirmPassword) return "Passwords don't match";
+    if (!startDate) return 'Please select a start date';
+    if (selectedClasses.length === 0) return 'Please select at least one drug class';
+    return null;
+  };
+
+  // Builds the date string from local wall-clock fields, not toISOString()
+  // (which converts to UTC first — for Mauritius, UTC+4, that can shift
+  // a locally-picked midnight back to the previous day).
+  const toLocalDateString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleCreatePatient = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const { data, error } = await supabase.functions.invoke('create-patient', {
+      body: {
+        fullName,
+        username: username.trim().toLowerCase(),
+        password: tempPassword,
+        startDate: toLocalDateString(startDate!),
+        drugClasses: selectedClasses.map((c) => ({ drugClass: c, isPrimary: c === primaryClass })),
+      },
+    });
+
+    if (error || data?.error) {
+      setErrorMessage(data?.error ?? error!.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    Alert.alert(
+      'Patient created',
+      `Username: ${data.username}\n\nMake sure to relay these credentials to the patient.`,
+      [{ text: 'OK', onPress: () => router.replace('/(doctor)/dashboard') }]
+    );
   };
 
   return (
@@ -103,10 +166,28 @@ export default function AddPatient() {
           </View>
 
           <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Start Date</Text>
-          <View className="flex-row items-center justify-between rounded-xl bg-card px-4 py-3">
-            <Text className="text-sm" style={{ color: colors.textMuted }}>Select start date</Text>
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            className="flex-row items-center justify-between rounded-xl bg-card px-4 py-3"
+          >
+            {startDate ? (
+              <Text className="text-sm text-text-dark">{formatDateLabel(toLocalDateString(startDate))}</Text>
+            ) : (
+              <Text className="text-sm" style={{ color: colors.textMuted }}>Select start date</Text>
+            )}
             <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
-          </View>
+          </Pressable>
+          {showDatePicker && (
+            <DateTimePicker
+              value={startDate ?? new Date()}
+              mode="date"
+              maximumDate={new Date()}
+              onChange={(event, selected) => {
+                setShowDatePicker(false);
+                if (selected) setStartDate(selected);
+              }}
+            />
+          )}
 
           <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Drug Class</Text>
           <Text className="mb-2 text-xs" style={{ color: colors.textMuted }}>Select one or more. Mark one as primary.</Text>
@@ -150,12 +231,21 @@ export default function AddPatient() {
             </View>
           )}
 
+          {errorMessage && (
+            <Text className="mt-4 text-center text-sm" style={{ color: colors.riskHigh }}>
+              {errorMessage}
+            </Text>
+          )}
+
           <Pressable
-            onPress={() => router.push('/(doctor)/dashboard')}
+            onPress={handleCreatePatient}
+            disabled={isSubmitting}
             className="mt-8 items-center rounded-2xl py-4"
-            style={{ backgroundColor: colors.primary }}
+            style={{ backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 }}
           >
-            <Text className="text-base font-semibold text-white">Create Patient</Text>
+            <Text className="text-base font-semibold text-white">
+              {isSubmitting ? 'Creating...' : 'Create Patient'}
+            </Text>
           </Pressable>
         </ScrollView>
 

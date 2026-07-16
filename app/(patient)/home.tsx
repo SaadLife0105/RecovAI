@@ -15,12 +15,12 @@ import { StreakCard } from '../../components/cards/StreakCard';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
-import { formatTimestamp } from '../../lib/formatDate';
+import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
 
-// DEV-ONLY: useCheckIns().hasCheckedInToday is always true right now
-// (the mock data's last entry is dated MOCK_TODAY). Flip this to true
-// locally to preview the "haven't checked in yet" empty state — remove
-// once real data can naturally produce both states.
+// DEV-ONLY: force the "haven't checked in yet" layout regardless of what
+// useCheckIns().hasCheckedInToday actually returns — useful for visually
+// checking this branch still renders correctly without needing a patient
+// account with zero check-ins today. Remove once no longer needed.
 const DEV_FORCE_EMPTY = false;
 
 function activityLabel(steps: number): string {
@@ -90,7 +90,7 @@ export default function PatientHome() {
             </View>
 
             <RecentCheckInCard
-              dateLabel={formatTimestamp(latestCheckIn.createdAt)}
+              dateLabel={formatTimestamp(toDeviceLocalIsoString(latestCheckIn.createdAt))}
               score={latestCheckIn.riskScore}
               mood={latestCheckIn.mood}
               sleep={latestCheckIn.sleep}

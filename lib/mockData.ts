@@ -128,12 +128,12 @@ export const JOURNAL_ENTRIES: JournalEntry[] = [
 // Doctor caseload — matches mockup screen 31 exactly (avatar color is
 // presentation, not domain, data).
 export const PATIENTS: PatientRowData[] = [
-  { name: 'Alex Brown', patientId: 'P1024', age: 28, score: 72, statusLabel: 'High Risk', avatarColor: colors.primary },
-  { name: 'Morgan Davis', patientId: 'P1037', age: 32, score: 48, statusLabel: 'Medium Risk', avatarColor: colors.secondary },
-  { name: 'Taylor Johnson', patientId: 'P1041', age: 24, score: 28, statusLabel: 'Low Risk', avatarColor: colors.textDark },
-  { name: 'Jordan Smith', patientId: 'P1052', age: 45, score: null, lastCheckInDaysAgo: 8, statusLabel: 'Inactive (7+ days)', avatarColor: colors.textMuted },
-  { name: 'Casey Lee', patientId: 'P1060', age: 29, score: null, notLoggedIn: true, statusLabel: 'Pending', avatarColor: colors.textMuted },
-  { name: 'Jamie Wilson', patientId: 'P1073', age: 35, score: null, lastCheckInDaysAgo: 12, statusLabel: 'Inactive (7+ days)', avatarColor: colors.textMuted },
+  { id: PATIENT_ID, name: 'Alex Brown', patientId: 'P1024', score: 72, statusLabel: 'High Risk', avatarColor: colors.primary },
+  { id: 'patient-3', name: 'Morgan Davis', patientId: 'P1037', score: 48, statusLabel: 'Medium Risk', avatarColor: colors.secondary },
+  { id: 'patient-4', name: 'Taylor Johnson', patientId: 'P1041', score: 28, statusLabel: 'Low Risk', avatarColor: colors.textDark },
+  { id: 'patient-2', name: 'Jordan Smith', patientId: 'P1052', score: null, lastCheckInDaysAgo: 8, statusLabel: 'Inactive (7+ days)', avatarColor: colors.textMuted },
+  { id: 'patient-5', name: 'Casey Lee', patientId: 'P1060', score: null, notLoggedIn: true, statusLabel: 'Pending', avatarColor: colors.textMuted },
+  { id: 'patient-6', name: 'Jamie Wilson', patientId: 'P1073', score: null, lastCheckInDaysAgo: 12, statusLabel: 'Inactive (7+ days)', avatarColor: colors.textMuted },
 ];
 
 // Mutated in place by updateDoctorNote() (see lib/hooks/useDoctorNote.ts)

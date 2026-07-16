@@ -1,19 +1,48 @@
-import { CURRENT_STREAK, LONGEST_STREAK, PATIENT_ID } from '../mockData';
+import { useEffect, useState } from 'react';
+import { supabase } from '../supabase';
+import { useSession } from './useSession';
 
 interface StreakData {
   currentStreak: number;
   longestStreak: number;
 }
 
-/**
- * Days-sober streak. Static mock numbers for now — real computation needs
- * Mauritius-timezone-aware day boundaries, which lands with the risk
- * engine (see docs/Development Plan.md §2.1/§2.2), not here.
- */
-export function useStreak(_patientId: string = PATIENT_ID): { data: StreakData; isLoading: boolean; error: null } {
-  return {
-    data: { currentStreak: CURRENT_STREAK, longestStreak: LONGEST_STREAK },
-    isLoading: false,
-    error: null,
-  };
+/** Days-sober streak, backed by the `streaks` table (Mauritius-timezone-aware; see lib/streakLogic.ts). */
+export function useStreak(patientId?: string): { data: StreakData; isLoading: boolean; error: null } {
+  const { session } = useSession();
+  const resolvedPatientId = patientId ?? session?.user.id;
+
+  const [data, setData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!resolvedPatientId) {
+      setData({ currentStreak: 0, longestStreak: 0 });
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoading(true);
+
+    supabase
+      .from('streaks')
+      .select('*')
+      .eq('patient_id', resolvedPatientId)
+      .maybeSingle()
+      .then(({ data: row }) => {
+        if (!isMounted) return;
+        setData({
+          currentStreak: row?.current_streak ?? 0,
+          longestStreak: row?.longest_streak ?? 0,
+        });
+        setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedPatientId]);
+
+  return { data, isLoading, error: null };
 }

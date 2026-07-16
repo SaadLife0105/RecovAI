@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/theme';
 import { RiskGauge } from '../../../components/gauges/RiskGauge';
@@ -10,22 +10,8 @@ import { AlertRow } from '../../../components/cards/AlertRow';
 import { SOSButton } from '../../../components/sos/SOSButton';
 import { ArchivePatientModal } from '../../../components/modals/ArchivePatientModal';
 import { useDoctorNote } from '../../../lib/hooks/useDoctorNote';
+import { usePatientDetail } from '../../../lib/hooks/usePatientDetail';
 import { formatTimestamp } from '../../../lib/formatDate';
-import { PATIENTS } from '../../../lib/mockData';
-
-// dashboard.tsx's onPress always navigates here with a hardcoded id: '1'
-// regardless of which row was tapped, so there's no real per-ID lookup to
-// do yet — this just consolidates the duplicate hardcoded name/age/ID
-// copy onto the one real caseload row (Alex Brown) instead of retyping it.
-const patient = PATIENTS[0];
-
-// No hook or mock data backs a per-patient 7-day risk trend series yet —
-// stays local mock pending real historical data (Development Plan Phase 3).
-const MOCK_TREND = {
-  riskScore: 72,
-  trendDelta: 12,
-  trendData: [50, 54, 58, 62, 66, 70, 72],
-};
 
 const TABS = ['Overview', 'Check-ins', 'Alerts', 'Zones', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
@@ -40,9 +26,21 @@ const TAB_ICONS: Record<Exclude<Tab, 'Overview'>, keyof typeof Ionicons.glyphMap
 /** Screen 16 — Patient Detail (Doctor). Only the Overview tab is built; the rest are placeholders. */
 export default function PatientDetail() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
-  const { data: note } = useDoctorNote();
+  const { data: patient } = usePatientDetail(id);
+  const { data: note } = useDoctorNote(id);
+
+  if (!patient) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <View className="flex-1 items-center justify-center px-8">
+          <Text className="text-sm text-text-muted">Loading patient…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -60,15 +58,19 @@ export default function PatientDetail() {
               <View className="ml-3">
                 <View className="flex-row items-center">
                   <Text className="text-base font-bold text-text-dark">{patient.name}</Text>
-                  <View className="ml-2 rounded-full px-2 py-0.5" style={{ backgroundColor: colors.riskLowBg }}>
-                    <Text className="text-[10px] font-semibold" style={{ color: colors.riskLowText }}>
-                      Active
+                  <View
+                    className="ml-2 rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: patient.archived ? colors.riskMediumBg : colors.riskLowBg }}
+                  >
+                    <Text
+                      className="text-[10px] font-semibold"
+                      style={{ color: patient.archived ? colors.riskMediumText : colors.riskLowText }}
+                    >
+                      {patient.archived ? 'Archived' : 'Active'}
                     </Text>
                   </View>
                 </View>
-                <Text className="text-xs text-text-muted">
-                  {patient.age} years old • ID: {patient.patientId}
-                </Text>
+                <Text className="text-xs text-text-muted">ID: {patient.username ?? patient.id.slice(0, 8)}</Text>
               </View>
             </View>
             <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} />
@@ -99,20 +101,37 @@ export default function PatientDetail() {
               <View className="flex-row items-center rounded-2xl bg-card p-4">
                 <View className="flex-1 items-center">
                   <Text className="mb-2 self-start text-xs text-text-muted">Risk Score</Text>
-                  <RiskGauge score={MOCK_TREND.riskScore} size={120} />
+                  {patient.latestScore !== null ? (
+                    <RiskGauge score={patient.latestScore} size={120} showCaption={false} />
+                  ) : (
+                    <Text className="text-center text-xs text-text-muted">No check-ins yet</Text>
+                  )}
                 </View>
                 <View className="flex-1 pl-2">
                   <Text className="text-xs text-text-muted">Trend (7 days)</Text>
-                  <View className="mt-1 flex-row items-center">
-                    <Ionicons name="trending-up" size={16} color={colors.riskHigh} />
-                    <Text className="ml-1 text-base font-bold" style={{ color: colors.riskHighText }}>
-                      {MOCK_TREND.trendDelta}
-                    </Text>
-                  </View>
-                  <Text className="text-xs text-text-muted">from last 7 days</Text>
-                  <View className="mt-2">
-                    <MiniSparkline data={MOCK_TREND.trendData} color={colors.riskHigh} width={100} height={40} />
-                  </View>
+                  {patient.trendDelta !== null ? (
+                    <>
+                      <View className="mt-1 flex-row items-center">
+                        <Ionicons
+                          name={patient.trendDelta >= 0 ? 'trending-up' : 'trending-down'}
+                          size={16}
+                          color={patient.trendDelta >= 0 ? colors.riskHigh : colors.riskLow}
+                        />
+                        <Text
+                          className="ml-1 text-base font-bold"
+                          style={{ color: patient.trendDelta >= 0 ? colors.riskHighText : colors.riskLowText }}
+                        >
+                          {patient.trendDelta}
+                        </Text>
+                      </View>
+                      <Text className="text-xs text-text-muted">from last 7 days</Text>
+                      <View className="mt-2">
+                        <MiniSparkline data={patient.trendData} color={colors.riskHigh} width={100} height={40} />
+                      </View>
+                    </>
+                  ) : (
+                    <Text className="mt-1 text-xs text-text-muted">Not enough data yet — check back after a few more check-ins.</Text>
+                  )}
                 </View>
               </View>
 
