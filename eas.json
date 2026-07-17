@@ -5,8 +5,6 @@
   },
   "build": {
     "development": {
-      "node": "22.15.1",
-      "npm": "11.16.0",
       "developmentClient": true,
       "distribution": "internal",
       "android": {
