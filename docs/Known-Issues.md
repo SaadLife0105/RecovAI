@@ -15,6 +15,44 @@ Add to this file as issues surface; remove/check off once resolved.
 ## Resolved
 *(move items here once fixed, with a one-line note on the fix)*
 
+- **Relapse logging (Development Plan.md §2.2) — built and verified end-to-end, including two real RLS/trigger bugs found via live testing with an actual patient session, not caught by reading the SQL alone.**
+  Migration `0002_relapse_logs.sql` added the `relapse_logs` table + RLS.
+  `LogRelapseModal`, `check-in.tsx`'s `handleLogRelapse`, and a new
+  `relapse-logged.tsx` confirmation screen wired the full flow — insert
+  `relapse_logs`, reset `profiles.sobriety_start_date`, insert a
+  `type: 'relapse_logged'` doctor alert; `streaks` is deliberately never
+  touched (see the existing 2.2 note on why). Also fixed the "Days
+  Sober" / check-in-streak label conflation flagged in that same note:
+  `StreakCard.tsx` now says "Day Streak"; a genuine "Days Sober" stat
+  (via `daysBetween(sobriety_start_date, today)`) was added to
+  `profile.tsx` — **still missing from `home.tsx`; see the Phase 2.3
+  verification note in Development Plan.md.**
+  Two schema bugs surfaced only once a real patient session (not the
+  service role) wrote to these tables for the first time:
+  - `enforce_profile_role_invariants()` (0001) wasn't `security
+    definer`, so its own internal "does assigned_doctor_id point at a
+    real doctor" check ran under the calling session's RLS — a patient
+    updating their own `sobriety_start_date` couldn't see their own
+    doctor's profile row (blocked by RLS) to satisfy its own trigger's
+    check, so any patient self-update to `profiles` failed with
+    "assigned_doctor_id must reference a doctor profile" even with
+    fully valid data. Fixed in
+    `0003_fix_role_invariant_trigger_rls.sql` (`security definer` +
+    explicit `search_path`).
+  - `alerts` had no INSERT policy for patients at all — only the
+    doctor-full-access policy existed, so a patient-initiated alert
+    insert failed RLS outright. Fixed in
+    `0004_alerts_patient_insert_policy.sql`, scoped narrowly (a patient
+    can only insert an alert naming themselves and their own currently-
+    assigned doctor) — AI-agent alerts (Phase 5) still go through the
+    service role, not this policy.
+  Also fixed while retrofitting `useAlerts()`/`alerts.tsx` to real
+  Supabase for this feature: `dayLabel()` was comparing against the
+  frozen mock `MOCK_TODAY` constant, and `alert.createdAt` was rendered
+  without converting real UTC timestamps to Mauritius wall-clock time
+  (`toMauritiusIsoString`) — both would have silently mis-displayed
+  every real alert's date/time.
+
 - **Drug-class selection missing from `add-patient.tsx` (found during Phase 1.2 prep).**
   A real gap vs. Milestone 1 (Development Plan.md) — `DrugClass`,
   `DRUG_CLASS_LABELS`, and `PatientSubstance` already existed in

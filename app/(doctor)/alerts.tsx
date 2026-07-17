@@ -8,8 +8,9 @@ import { EmptyStateCard } from '../../components/cards/EmptyStateCard';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { useAlerts } from '../../lib/hooks/useAlerts';
-import { PATIENTS, PATIENT_NAMES, MOCK_TODAY } from '../../lib/mockData';
+import { usePatients } from '../../lib/hooks/usePatients';
 import { formatDateLabel, formatTime } from '../../lib/formatDate';
+import { getMauritiusDateString, toMauritiusIsoString } from '../../lib/mauritiusTime';
 
 const FILTERS = ['All', 'Unread', 'High Risk'] as const;
 
@@ -18,6 +19,7 @@ const ALERT_TYPE_META: Record<string, { badgeLabel: string; message: string; dot
   missed_checkin: { badgeLabel: 'Missed Check-in', message: 'No check-in recorded today', dotColor: colors.riskMedium },
   zone_breach: { badgeLabel: 'Zone Breach', message: 'Entered a risk zone', dotColor: colors.riskMedium },
   predicted_high_risk: { badgeLabel: 'Predicted High Risk', message: 'High risk predicted for next 24h', dotColor: colors.riskMedium },
+  relapse_logged: { badgeLabel: 'Relapse Logged', message: 'Patient logged a relapse', dotColor: colors.riskHigh },
 };
 const FALLBACK_ALERT_META = { badgeLabel: 'Alert', message: 'New alert', dotColor: colors.riskMedium };
 
@@ -28,20 +30,20 @@ function yesterdayOf(dateStr: string): string {
 }
 
 function dayLabel(iso: string): string {
+  const today = getMauritiusDateString();
   const date = iso.slice(0, 10);
-  if (date === MOCK_TODAY) return 'Today';
-  if (date === yesterdayOf(MOCK_TODAY)) return 'Yesterday';
+  if (date === today) return 'Today';
+  if (date === yesterdayOf(today)) return 'Yesterday';
   return formatDateLabel(date);
-}
-
-function avatarColorFor(name: string): string {
-  return PATIENTS.find((p) => p.name === name)?.avatarColor ?? colors.textMuted;
 }
 
 /** Screen 13 — Doctor Alerts. Filter tabs filter useAlerts() data by read/urgency. */
 export default function DoctorAlerts() {
   const { data: alerts } = useAlerts();
+  const { data: patients } = usePatients();
   const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]>('All');
+
+  const patientById = new Map(patients.patients.map((p) => [p.id, { name: p.name, avatarColor: p.avatarColor }]));
 
   const filteredAlerts = alerts.filter((alert) => {
     if (activeFilter === 'Unread') return !alert.read;
@@ -80,18 +82,21 @@ export default function DoctorAlerts() {
             <View className="mt-4">
               {filteredAlerts.map((alert) => {
                 const typeMeta = ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META;
-                const name = PATIENT_NAMES[alert.patientId] ?? alert.patientId;
+                const patient = patientById.get(alert.patientId);
+                const mauritiusCreatedAt = toMauritiusIsoString(alert.createdAt);
+                const name = patient?.name ?? alert.patientId.slice(0, 8);
+                const isHigh = typeMeta.badgeLabel === 'High Risk' || typeMeta.badgeLabel === 'Relapse Logged';
                 const badge = {
                   label: typeMeta.badgeLabel,
-                  bg: typeMeta.badgeLabel === 'High Risk' ? colors.riskHighBg : colors.riskMediumBg,
-                  text: typeMeta.badgeLabel === 'High Risk' ? colors.riskHighText : colors.riskMediumText,
+                  bg: isHigh ? colors.riskHighBg : colors.riskMediumBg,
+                  text: isHigh ? colors.riskHighText : colors.riskMediumText,
                 };
-                const meta = `${dayLabel(alert.createdAt)}, ${formatTime(alert.createdAt)} • ${alert.read ? 'Read' : 'Unread'}`;
+                const meta = `${dayLabel(mauritiusCreatedAt)}, ${formatTime(mauritiusCreatedAt)} • ${alert.read ? 'Read' : 'Unread'}`;
                 return (
                   <AlertRow
                     key={alert.id}
                     dotColor={typeMeta.dotColor}
-                    avatar={{ initials: name.split(' ').map((p) => p[0]).join(''), color: avatarColorFor(name) }}
+                    avatar={{ initials: name.split(' ').map((p) => p[0]).join(''), color: patient?.avatarColor ?? colors.textMuted }}
                     title={name}
                     message={typeMeta.message}
                     badge={badge}

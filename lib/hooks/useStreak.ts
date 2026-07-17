@@ -7,7 +7,7 @@ interface StreakData {
   longestStreak: number;
 }
 
-/** Days-sober streak, backed by the `streaks` table (Mauritius-timezone-aware; see lib/streakLogic.ts). */
+/** Check-in streak, backed by the `streaks` table (Mauritius-timezone-aware; see lib/streakLogic.ts). */
 export function useStreak(patientId?: string): { data: StreakData; isLoading: boolean; error: null } {
   const { session } = useSession();
   const resolvedPatientId = patientId ?? session?.user.id;

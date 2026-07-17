@@ -16,7 +16,7 @@ interface StreakCardProps {
   tagline?: string;
 }
 
-/** Days-sober streak display, reused across Home, Check-in Success, and Profile. Badge art is the day-range streak illustration (see docs/Illustrations.md). */
+/** Check-in streak display, reused across Home, Check-in Success, and Profile. Badge art is the day-range streak illustration (see docs/Illustrations.md). */
 export function StreakCard({ days, variant = 'inline', status, tagline }: StreakCardProps) {
   const badge = getStreakIllustration(days);
 
@@ -25,7 +25,7 @@ export function StreakCard({ days, variant = 'inline', status, tagline }: Streak
       <View className="flex-row items-center">
         <Image source={badge} style={{ width: 22, height: 22 }} resizeMode="contain" />
         <Text className="ml-2 text-lg font-bold text-text-dark">{days}</Text>
-        <Text className="ml-1 text-sm text-text-muted">Days Sober</Text>
+        <Text className="ml-1 text-sm text-text-muted">Day Streak</Text>
       </View>
     );
   }
@@ -37,7 +37,7 @@ export function StreakCard({ days, variant = 'inline', status, tagline }: Streak
           <Image source={badge} style={{ width: 22, height: 22 }} resizeMode="contain" />
           <Text className="ml-2 text-lg font-bold text-text-dark">{days}</Text>
         </View>
-        <Text className="mt-1 text-xs text-text-muted">Days Sober</Text>
+        <Text className="mt-1 text-xs text-text-muted">Day Streak</Text>
         {status ? (
           <Text className="mt-1 text-sm font-bold" style={{ color: colors.riskHighText }}>
             {status}
@@ -53,7 +53,7 @@ export function StreakCard({ days, variant = 'inline', status, tagline }: Streak
         <Image source={badge} style={{ width: 28, height: 28 }} resizeMode="contain" />
         <View className="ml-2">
           <Text className="text-lg font-bold text-text-dark">{days}</Text>
-          <Text className="text-xs text-text-muted">Days Sober</Text>
+          <Text className="text-xs text-text-muted">Day Streak</Text>
         </View>
       </View>
       {status ? (

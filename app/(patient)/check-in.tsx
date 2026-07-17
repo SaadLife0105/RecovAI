@@ -8,6 +8,7 @@ import { RatingSlider } from '../../components/sliders/RatingSlider';
 import { Card } from '../../components/cards/Card';
 import { StatRow } from '../../components/cards/StatRow';
 import { SOSButton } from '../../components/sos/SOSButton';
+import { LogRelapseModal } from '../../components/modals/LogRelapseModal';
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/hooks/useSession';
 import { getMauritiusDateString } from '../../lib/mauritiusTime';
@@ -15,9 +16,7 @@ import { formatDateLabel } from '../../lib/formatDate';
 import { computeRiskScore } from '../../lib/riskEngine';
 import { computeNextStreak, StreakState } from '../../lib/streakLogic';
 import { DrugClass } from '../../lib/types';
-
-// Mock passive data — real sensor wiring lands in Phase 2.4 (see docs/Development Plan.md)
-const MOCK_PASSIVE = { steps: 6342, zone: 'Safe Zone' };
+import { MOCK_PASSIVE } from '../../lib/mockPassiveData';
 
 /** Screen 6 — Daily Check-In. No live risk preview: score is computed on submit only. */
 export default function CheckIn() {
@@ -31,6 +30,8 @@ export default function CheckIn() {
   const [primaryDrugClass, setPrimaryDrugClass] = useState<DrugClass | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [relapseModalOpen, setRelapseModalOpen] = useState(false);
+  const [isLoggingRelapse, setIsLoggingRelapse] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -118,6 +119,66 @@ export default function CheckIn() {
     router.replace('/checkin-success');
   };
 
+  // Relapse logging never reads or writes `streaks` — the check-in streak and
+  // sobriety are deliberately separate concepts (see Development Plan.md
+  // "Relapse logging"). Only relapse_logs + profiles.sobriety_start_date change.
+  const handleLogRelapse = async (notes: string | null) => {
+    if (!patientId) return;
+
+    setIsLoggingRelapse(true);
+
+    const { error: relapseError } = await supabase.from('relapse_logs').insert({ patient_id: patientId, notes });
+    if (relapseError) {
+      setErrorMessage(relapseError.message);
+      setIsLoggingRelapse(false);
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ sobriety_start_date: getMauritiusDateString() })
+      .eq('id', patientId);
+    if (profileError) {
+      setErrorMessage(profileError.message);
+      setIsLoggingRelapse(false);
+      return;
+    }
+
+    const { data: profileRow, error: doctorLookupError } = await supabase
+      .from('profiles')
+      .select('assigned_doctor_id')
+      .eq('id', patientId)
+      .single();
+    if (doctorLookupError) {
+      setErrorMessage(doctorLookupError.message);
+      setIsLoggingRelapse(false);
+      return;
+    }
+
+    const assignedDoctorId = profileRow?.assigned_doctor_id;
+    if (!assignedDoctorId) {
+      console.warn('Patient has no assigned doctor — skipping relapse alert.');
+    } else {
+      const { error: alertError } = await supabase.from('alerts').insert({
+        patient_id: patientId,
+        doctor_id: assignedDoctorId,
+        type: 'relapse_logged',
+        urgency: 'high',
+        xai_explanation: null,
+        read: false,
+      });
+      if (alertError) {
+        setErrorMessage(alertError.message);
+        setIsLoggingRelapse(false);
+        return;
+      }
+    }
+
+    setIsLoggingRelapse(false);
+    setRelapseModalOpen(false);
+    router.replace('/(patient)/relapse-logged');
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
@@ -191,9 +252,29 @@ export default function CheckIn() {
               {isSubmitting ? 'Submitting...' : 'Submit Check-In'}
             </Text>
           </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setErrorMessage(null);
+              setRelapseModalOpen(true);
+            }}
+            className="mt-4 items-center"
+          >
+            <Text className="text-center text-sm" style={{ color: colors.textMuted }}>
+              Had a setback? Log a relapse
+            </Text>
+          </Pressable>
         </ScrollView>
 
         <SOSButton />
+
+        <LogRelapseModal
+          visible={relapseModalOpen}
+          onClose={() => setRelapseModalOpen(false)}
+          onConfirm={handleLogRelapse}
+          isSubmitting={isLoggingRelapse}
+          errorMessage={errorMessage}
+        />
       </View>
     </SafeAreaView>
   );

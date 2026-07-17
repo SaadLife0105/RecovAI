@@ -119,6 +119,13 @@ export interface ChatMessage {
   read?: boolean;
 }
 
+export interface RelapseLog {
+  id: string;
+  patientId: string;
+  loggedAt: string; // ISO timestamp
+  notes: string | null;
+}
+
 export interface DoctorNote {
   id: string;
   patientId: string;

@@ -11,6 +11,7 @@ import { useStreak } from '../../lib/hooks/useStreak';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
 import { PATIENT_PREFERENCES } from '../../lib/mockData';
 import { supabase } from '../../lib/supabase';
+import { daysBetween, getMauritiusDateString } from '../../lib/mauritiusTime';
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -32,6 +33,11 @@ export default function PatientProfile() {
 
   const progressStats: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }[] = [
     { icon: 'speedometer-outline', label: 'Longest Streak', value: `${streak.longestStreak} days` },
+    {
+      icon: 'flame-outline',
+      label: 'Days Sober',
+      value: profile.sobrietyStartDate ? `${daysBetween(profile.sobrietyStartDate, getMauritiusDateString())}` : '—',
+    },
     { icon: 'calendar-outline', label: 'Check-ins', value: String(checkIns.length) },
     { icon: 'stats-chart-outline', label: 'Avg Risk Score', value: avgRiskScoreLabel },
   ];

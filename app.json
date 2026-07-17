@@ -2,6 +2,7 @@
   "expo": {
     "name": "RecovAI",
     "slug": "RecovAI",
+    "owner": "thebuilder0000",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,6 +12,14 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.saadlife.recovai",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACTIVITY_RECOGNITION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F7F5",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,10 +34,18 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-location",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f0b7541d-0f1c-46af-825d-abb944800dbb"
+      }
     }
   }
 }

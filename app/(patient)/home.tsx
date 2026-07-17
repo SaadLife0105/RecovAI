@@ -16,6 +16,8 @@ import { useCheckIns } from '../../lib/hooks/useCheckIns';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
 import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
+import { daysBetween, getMauritiusDateString } from '../../lib/mauritiusTime';
+import { MOCK_PASSIVE } from '../../lib/mockPassiveData';
 
 // DEV-ONLY: force the "haven't checked in yet" layout regardless of what
 // useCheckIns().hasCheckedInToday actually returns — useful for visually
@@ -24,9 +26,10 @@ import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
 const DEV_FORCE_EMPTY = false;
 
 function activityLabel(steps: number): string {
-  if (steps < 3000) return 'Low';
-  if (steps < 8000) return 'Moderate';
-  return 'High';
+  if (steps < 2000) return 'Staying In';
+  if (steps < 5000) return 'Light Movement';
+  if (steps < 10000) return 'Active Day';
+  return 'Very Active';
 }
 
 const QUICK_ACTIONS: { label: string; icon: keyof typeof Ionicons.glyphMap; route: '/(patient)/journal' | '/(patient)/chat' | '/(patient)/history' | '/(patient)/profile' }[] = [
@@ -66,13 +69,25 @@ export default function PatientHome() {
               <StreakCard days={streak.currentStreak} variant="inline" />
             </View>
 
-            <View className="mt-4 flex-row items-center rounded-2xl p-4" style={{ backgroundColor: colors.safeZoneBg }}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.riskLow} />
+            <View
+              className="mt-4 flex-row items-center rounded-2xl p-4"
+              style={{ backgroundColor: MOCK_PASSIVE.zone === 'Safe Zone' ? colors.safeZoneBg : colors.nearRiskBg }}
+            >
+              <Ionicons
+                name={MOCK_PASSIVE.zone === 'Safe Zone' ? 'shield-checkmark' : 'warning'}
+                size={20}
+                color={MOCK_PASSIVE.zone === 'Safe Zone' ? colors.riskLow : colors.riskHigh}
+              />
               <View className="ml-3">
-                <Text className="text-sm font-semibold" style={{ color: colors.riskLowText }}>
-                  Safe Zone
+                <Text
+                  className="text-sm font-semibold"
+                  style={{ color: MOCK_PASSIVE.zone === 'Safe Zone' ? colors.riskLowText : colors.riskHigh }}
+                >
+                  {MOCK_PASSIVE.zone === 'Safe Zone' ? 'Safe Zone' : 'Near Risk Zone'}
                 </Text>
-                <Text className="text-xs text-text-muted">You are in a safe area</Text>
+                <Text className="text-xs text-text-muted">
+                  {MOCK_PASSIVE.zone === 'Safe Zone' ? 'You are in a safe area' : 'You are near a flagged area'}
+                </Text>
               </View>
             </View>
 
@@ -81,6 +96,15 @@ export default function PatientHome() {
                 <StatRow icon="footsteps-outline" label="Steps" value={latestCheckIn.steps.toLocaleString()} />
                 <StatRow icon="pulse-outline" label="Activity" value={activityLabel(latestCheckIn.steps)} />
               </View>
+              {profile?.sobrietyStartDate && (
+                <View className="mt-2 flex-row">
+                  <StatRow
+                    icon="flame-outline"
+                    label="Days Sober"
+                    value={String(daysBetween(profile.sobrietyStartDate, getMauritiusDateString()))}
+                  />
+                </View>
+              )}
             </Card>
 
             <View className="mt-4">
@@ -141,6 +165,16 @@ export default function PatientHome() {
               </View>
             </View>
           </View>
+
+          {profile?.sobrietyStartDate && (
+            <View className="mt-3 rounded-2xl bg-card p-4">
+              <StatRow
+                icon="flame-outline"
+                label="Days Sober"
+                value={String(daysBetween(profile.sobrietyStartDate, getMauritiusDateString()))}
+              />
+            </View>
+          )}
 
           <View className="mt-4 rounded-2xl p-4" style={{ backgroundColor: colors.riskLowBg }}>
             <Text className="text-sm font-medium" style={{ color: colors.riskLowText }}>
