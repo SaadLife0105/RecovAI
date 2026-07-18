@@ -16,13 +16,14 @@ import { formatDateLabel } from '../../lib/formatDate';
 import { computeRiskScore } from '../../lib/riskEngine';
 import { computeNextStreak, StreakState } from '../../lib/streakLogic';
 import { DrugClass } from '../../lib/types';
-import { MOCK_PASSIVE } from '../../lib/mockPassiveData';
+import { usePassiveData } from '../../lib/context/PassiveDataContext';
 
 /** Screen 6 — Daily Check-In. No live risk preview: score is computed on submit only. */
 export default function CheckIn() {
   const router = useRouter();
   const { session } = useSession();
   const patientId = session?.user.id;
+  const passive = usePassiveData();
   const [mood, setMood] = useState(6);
   const [sleep, setSleep] = useState(5);
   const [craving, setCraving] = useState(7);
@@ -57,9 +58,9 @@ export default function CheckIn() {
     setErrorMessage(null);
 
     const today = getMauritiusDateString();
-    const nearRiskZone = MOCK_PASSIVE.zone !== 'Safe Zone';
+    const nearRiskZone = passive.currentZoneStatus === 'risk';
     const score = computeRiskScore(
-      { craving, mood, sleep, isolated: !!isolated, steps: MOCK_PASSIVE.steps, nearRiskZone },
+      { craving, mood, sleep, isolated: !!isolated, steps: passive.steps, nearRiskZone },
       primaryDrugClass
     );
 
@@ -71,7 +72,7 @@ export default function CheckIn() {
         sleep,
         craving,
         isolated: !!isolated,
-        steps: MOCK_PASSIVE.steps,
+        steps: passive.steps,
         risk_score: score,
       },
       { onConflict: 'patient_id,date' }
@@ -195,9 +196,36 @@ export default function CheckIn() {
 
           <Card title="Today's Info (Passive)" className="mt-4">
             <View className="mt-2 flex-row">
-              <StatRow icon="footsteps-outline" label="Steps" value={MOCK_PASSIVE.steps.toLocaleString()} />
-              <StatRow icon="location-outline" label="Location" value={MOCK_PASSIVE.zone} valueColor={colors.riskLowText} />
+              <StatRow
+                icon="footsteps-outline"
+                label="Steps"
+                value={passive.stepsAvailable ? passive.steps.toLocaleString() : '—'}
+              />
+              <StatRow
+                icon="location-outline"
+                label="Location"
+                value={
+                  !passive.zoneAvailable
+                    ? '—'
+                    : passive.currentZoneStatus === 'risk'
+                    ? 'Near Risk Zone'
+                    : passive.currentZoneStatus === 'safe'
+                    ? 'Safe Zone'
+                    : 'No zone data'
+                }
+                valueColor={passive.currentZoneStatus === 'risk' ? colors.riskHigh : colors.riskLowText}
+              />
             </View>
+            {!passive.stepsAvailable && (
+              <Text className="mt-2 text-xs text-text-muted">
+                Step tracking unavailable — {passive.stepsPermissionDenied ? 'permission not granted' : 'no sensor'}
+              </Text>
+            )}
+            {!passive.zoneAvailable && (
+              <Text className="mt-1 text-xs text-text-muted">
+                Location unavailable — {passive.zonePermissionDenied ? 'permission not granted' : 'no signal'}
+              </Text>
+            )}
           </Card>
 
           <View className="mt-4">

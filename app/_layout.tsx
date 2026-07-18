@@ -1,3 +1,4 @@
+import '../lib/backgroundLocationTask'; // must be first: registers the TaskManager task on every launch (incl. background-only)
 import '../global.css';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';

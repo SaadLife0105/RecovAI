@@ -15,9 +15,9 @@ import { StreakCard } from '../../components/cards/StreakCard';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
+import { usePassiveData } from '../../lib/context/PassiveDataContext';
 import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
 import { daysBetween, getMauritiusDateString } from '../../lib/mauritiusTime';
-import { MOCK_PASSIVE } from '../../lib/mockPassiveData';
 
 // DEV-ONLY: force the "haven't checked in yet" layout regardless of what
 // useCheckIns().hasCheckedInToday actually returns — useful for visually
@@ -45,8 +45,18 @@ export default function PatientHome() {
   const { data: checkIns, hasCheckedInToday } = useCheckIns();
   const { data: streak } = useStreak();
   const { data: profile } = usePatientProfile();
+  const { currentZoneStatus } = usePassiveData();
   const latestCheckIn = checkIns[checkIns.length - 1];
   const name = profile?.fullName.split(' ')[0] ?? '';
+
+  // Zone chip: green (safe) / red (risk) / neutral when we genuinely don't
+  // know (not near any zone, or location unavailable) — never imply either.
+  const zone =
+    currentZoneStatus === 'safe'
+      ? { bg: colors.safeZoneBg, icon: 'shield-checkmark' as const, iconColor: colors.riskLow, titleColor: colors.riskLowText, title: 'Safe Zone', subtitle: 'You are in a safe area' }
+      : currentZoneStatus === 'risk'
+      ? { bg: colors.nearRiskBg, icon: 'warning' as const, iconColor: colors.riskHigh, titleColor: colors.riskHigh, title: 'Near Risk Zone', subtitle: 'You are near a flagged area' }
+      : { bg: colors.card, icon: 'help-circle-outline' as const, iconColor: colors.textMuted, titleColor: colors.textDark, title: 'No Zone Data', subtitle: 'Location not available' };
 
   if (hasCheckedInToday && latestCheckIn && !DEV_FORCE_EMPTY) {
     return (
@@ -71,23 +81,14 @@ export default function PatientHome() {
 
             <View
               className="mt-4 flex-row items-center rounded-2xl p-4"
-              style={{ backgroundColor: MOCK_PASSIVE.zone === 'Safe Zone' ? colors.safeZoneBg : colors.nearRiskBg }}
+              style={{ backgroundColor: zone.bg }}
             >
-              <Ionicons
-                name={MOCK_PASSIVE.zone === 'Safe Zone' ? 'shield-checkmark' : 'warning'}
-                size={20}
-                color={MOCK_PASSIVE.zone === 'Safe Zone' ? colors.riskLow : colors.riskHigh}
-              />
+              <Ionicons name={zone.icon} size={20} color={zone.iconColor} />
               <View className="ml-3">
-                <Text
-                  className="text-sm font-semibold"
-                  style={{ color: MOCK_PASSIVE.zone === 'Safe Zone' ? colors.riskLowText : colors.riskHigh }}
-                >
-                  {MOCK_PASSIVE.zone === 'Safe Zone' ? 'Safe Zone' : 'Near Risk Zone'}
+                <Text className="text-sm font-semibold" style={{ color: zone.titleColor }}>
+                  {zone.title}
                 </Text>
-                <Text className="text-xs text-text-muted">
-                  {MOCK_PASSIVE.zone === 'Safe Zone' ? 'You are in a safe area' : 'You are near a flagged area'}
-                </Text>
+                <Text className="text-xs text-text-muted">{zone.subtitle}</Text>
               </View>
             </View>
 

@@ -8,6 +8,12 @@ export function getMauritiusDateString(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Real UTC instant corresponding to midnight Mauritius time on the given date's Mauritius day — the correct lower bound for "today" range queries against UTC-stamped data. */
+export function getMauritiusStartOfDayIso(date: Date = new Date()): string {
+  const mauritiusMidnightUtcMs = Date.parse(`${getMauritiusDateString(date)}T00:00:00Z`) - 4 * 60 * 60 * 1000;
+  return new Date(mauritiusMidnightUtcMs).toISOString();
+}
+
 /** Days between two "YYYY-MM-DD" Mauritius date strings (b - a), via UTC-midnight Date objects to avoid DST/local-timezone drift entirely. */
 export function daysBetween(dateA: string, dateB: string): number {
   const a = Date.parse(`${dateA}T00:00:00Z`);
