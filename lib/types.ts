@@ -81,6 +81,13 @@ export interface RiskZone {
   label: string;
 }
 
+export interface ZoneBreach {
+  id: string;
+  patientId: string;
+  zoneId: string;
+  detectedAt: string; // ISO timestamp
+}
+
 export interface Alert {
   id: string;
   patientId: string;

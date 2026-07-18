@@ -119,20 +119,29 @@ The single most important vertical slice: **check-in → risk score → display*
 **Verification note (checked against the live app, not assumed done) — now fully resolved.** First pass found: gauge, recent check-in summary, Check In Now CTA, and the streak flame were genuinely done (the flame is actually richer than spec — 16 illustrated tiers via `lib/streakIllustration.ts` rather than the planned 9, a reasonable refinement) but three gaps remained on `home.tsx`. All three now fixed and re-verified directly against the file: (1) a genuine "Days Sober" stat (`daysBetween(sobrietyStartDate, today)`, sourced from `usePatientProfile()`) now appears in both the checked-in and not-yet-checked-in branches, guarded on `sobrietyStartDate` existing; (2) the safe-zone chip now reads `MOCK_PASSIVE.zone` (hoisted to `lib/mockPassiveData.ts`, shared with `check-in.tsx`) with a real green/red branch — still mock until Phase 2.4, but no longer dead UI; (3) `activityLabel()` now implements the correct 4-tier scheme ("Staying In" <2k / "Light Movement" <5k / "Active Day" <10k / "Very Active") in place of the old 3-tier Low/Moderate/High version.
 
 ### 2.4 Passive data collection
-- [x] Pedometer: `expo-sensors` Pedometer, real per-day step count via `watchStepCount` + AsyncStorage accumulation
+- [x] Pedometer: superseded by Health Connect — see the dedicated entry below, kept separate since it's a genuine architecture change, not just an implementation detail of this line
 - [x] GPS: `expo-location` foreground watcher; haversine distance check against the patient's `risk_zones`; writes `zone_breaches` on entry into a risk zone; computes `nearRiskZone` flag for the risk engine
 - [x] **Zone breach debounce**: in-memory entry/exit transition tracking — only logs a new breach on a genuine entry, never while stationary inside a zone
 - [x] Graceful degradation path: denied permission degrades to `steps: 0` / `currentZoneStatus: null`, never crashes; both hooks surface *why* (permission vs. no sensor/signal) rather than failing silently
 - [x] Both hooks moved to a shared `app/(patient)/_layout.tsx` provider so tracking runs for the entire time the patient is anywhere in the app, not just on the check-in screen — an earlier version scoped `usePedometer()` to `check-in.tsx` alone, which meant steps were only counted while that one screen happened to be open. Caught via live device testing, not code review.
 - [x] Background location — `expo-task-manager` + `Location.startLocationUpdatesAsync`, genuinely continues logging `zone_breaches` while the app is backgrounded (confirmed real via Expo's documented TaskManager location-task support). Requires Android's persistent foreground-service notification and the separate `ACCESS_BACKGROUND_LOCATION` permission — both are OS-mandated, not something the app can hide.
-- [ ] **Background step counting — confirmed not achievable with current tooling, not merely deferred.** Expo's own current documentation states plainly: "Pedometer updates will not be delivered while the app is in the background. As an alternative, on Android, use another solution based on Health Connect API." `expo-sensors` has no background task hook for the pedometer at all (unlike `expo-location`, which does) — there is nothing to "wire up." Genuine background step tracking would mean integrating Android's Health Connect API directly, a separate library/native-module undertaking outside `expo-sensors` entirely. Left as explicit future work (see Future Work section below); state this as a stated limitation in the dissertation rather than implying continuous background step tracking exists.
+- [x] **Background step counting — resolved via Health Connect, superseding the earlier "not achievable" conclusion.** The original finding was correct as far as it went: `expo-sensors`' `Pedometer` genuinely has no background task hook (confirmed against Expo's own docs), so continuing down that path could not have worked. The actual fix was to stop trying to make RecovAI's own sensor watcher run in the background at all, and instead read from **Android Health Connect** — an OS-level data store that Samsung Health (or equivalent) already writes into continuously, independent of whether RecovAI is open. `usePedometer()` was rewritten around `initialize()` / `getGrantedPermissions()` / `aggregateRecord()` from `react-native-health-connect`, entirely replacing the old `watchStepCount` + AsyncStorage-accumulation approach (that code, and `expo-sensors` itself, were removed from the project). Verified genuinely working via live device testing: step totals read correctly increased across repeated queries while walking (460 → 490 → 496) and reflected data accumulated by Samsung Health even when RecovAI had been closed. Worth being precise in the dissertation about the distinction this reveals: RecovAI does not itself sense steps in the background (that remains genuinely impossible with this tooling) — it reads a continuously-updated store that something else populates. The practical outcome (a step count that reflects the whole day regardless of app state) is achieved either way; only the mechanism differs from what "background collection" might imply. See the Dissertation Alignment Check section below for the exact chapter passages (FR5, the Chapter 3 tools table) this affects.
 
 ### 2.5 History (Screen 7) + Journal + SOS
-- [ ] Check-in history list with per-day risk badge and mood/sleep/craving icons
-- [ ] Private journal (free text + mood emoji) — verify with a doctor account that RLS truly blocks access
-- [ ] Persistent floating SOS button on all patient screens — crisis sheet (SAMU 114, Emergency 999, hotlines)
+- [x] Check-in history list with per-day risk badge and mood/sleep/craving icons
+- [x] Private journal (free text + mood emoji) — verified with a real doctor account that RLS truly blocks access
+- [x] Persistent floating SOS button on all patient screens — crisis sheet (SAMU 114, Emergency 999, hotlines)
 
-**Milestone 2:** A patient can check in daily, see their gauge, streak, and history, with passive GPS/steps feeding the score. *(Dissertation: Implementation chapter — risk engine, EMA implementation, digital phenotyping pipeline.)*
+**Verification note (checked against the live app and real device/DB testing, not assumed done).** SOS/crisis sheet was already fully built with real tap-to-call and the correct Mauritius numbers — nothing needed there. Everything else needed real fixes, not just retrofits:
+- `useActivityFeed()` had a default-parameter bug: `patientId: string = PATIENT_ID` (a mock constant) was being explicitly passed down to `useCheckIns`/`useRiskZones`/`useJournalEntries`, overriding their own correct session-based defaulting — History would have shown the wrong patient's data (or none) regardless of who was logged in. Fixed by making the parameter genuinely optional and letting each sub-hook resolve the session itself.
+- The "Alerts" filter was calling `useAlerts()`, which is doctor-oriented (`WHERE doctor_id = ...`) — on a patient's own session this could never match anything. Patients also had **zero RLS read access to `alerts` at all** (only a doctor-full-access policy and a patient-insert-only policy existed). Fixed with a new, narrowly-scoped `"alerts: patient reads own"` SELECT policy (`0005_alerts_patient_select_policy.sql`) and a genuinely separate `usePatientAlerts()` hook, deliberately not merged with the doctor-facing one.
+- The "Zones" filter was a placeholder predating real `zone_breaches` tracking — it only ever synthesized one fake "entered safe zone" item anchored to the latest check-in's timestamp, and only if a *safe*-classified zone existed (never true for real risk-zone breaches, which is all that existed to test against). Replaced with a real `useZoneBreaches()` hook reading actual breach rows, joined against `risk_zones` for label/classification — verified against a real breach row logged during Phase 2.4's background-location testing.
+- `journal-new.tsx` was a complete no-op — its own comment said so ("Static UI; no real journal persistence yet"); Save just called `router.back()`. Now genuinely inserts into `journal_entries`, with a submitting state and a visible error on failure instead of the old unconditional silent navigate-away.
+- A day-labeling bug identical to the one already found and fixed once in `alerts.tsx` (comparing against the frozen `MOCK_TODAY` mock constant instead of the real date) existed independently in `history.tsx` too — fixed the same way, with `getMauritiusDateString()`.
+- A raw-UTC timestamp display bug (same class as both of the above, not caught until live-tested: a journal entry written ~15 minutes earlier displayed as roughly 4 hours off — Mauritius's exact UTC+4 offset) existed in both `journal.tsx` and `history.tsx`. Fixed with `toDeviceLocalIsoString()` at the display/grouping layer only — the underlying hooks still correctly return genuine UTC, per the project's established convention.
+- **The RLS journal claim was proven, not assumed**: a temporary button was added to the doctor's Patient Detail screen that ran `supabase.from('journal_entries').select('*')` with zero filters — the broadest possible test — from a real, logged-in doctor session. Result: `{"data": [], "error": null}`, despite the patient having a real journal entry in the table at the time. Confirmed and removed afterward.
+
+**Milestone 2 — genuinely, fully complete.** The entire patient core loop (check-in → risk score → display, passive GPS/steps foreground and background, history, journal, SOS) is real, backed by actual Supabase data, and verified through live device testing and a real cross-role RLS test rather than assumed from reading code or migration files. *(Dissertation: Implementation chapter — risk engine, EMA implementation, digital phenotyping pipeline.)*
 
 ---
 
@@ -260,8 +269,8 @@ Things that will silently break the project or the dissertation if ignored. Read
 
 ### Expo / platform traps
 1. **Push notifications do not work in Expo Go** on recent SDKs — remote push requires a **development build** (`eas build --profile development`). Plan for this before Phase 3.4/4.4, not when the first alert silently fails. Budget setup time for EAS on Windows.
-2. **Pedometer behaves differently per platform**: `Pedometer.getStepCountAsync(start, end)` is iOS-only; on Android you can only `watchStepCount` (live increments since subscription) and Android requires the `ACTIVITY_RECOGNITION` permission. Design the step pipeline as: watch live counts → accumulate into AsyncStorage → persist daily total at check-in. Test on a real Android device in week 2, not week 9.
-3. **Background GPS doesn't run in Expo Go** — background location needs a dev build with `expo-task-manager` config, and it drains battery. For the prototype, foreground-only tracking (while app is open + at check-in time) is defensible; state that limitation explicitly in the dissertation rather than pretending to have continuous tracking.
+2. ~~**Pedometer behaves differently per platform**...~~ **Superseded.** The originally planned `watchStepCount` + AsyncStorage-accumulation approach was built, then fully replaced with Android Health Connect (`react-native-health-connect`) — see Phase 2.4's entry for the full account and why. `expo-sensors` was removed from the project entirely.
+3. ~~**Background GPS doesn't run in Expo Go**... foreground-only tracking... is defensible...~~ **Superseded.** Background GPS was built and proven working via `expo-task-manager` + a real dev build — see Phase 2.4 and the Dissertation Alignment Check section (NFR16 now needs revising to match). The original foreground-only scoping was the right conservative default at the time this was written; it turned out not to be a hard constraint.
 4. **react-native-maps needs native config** (Google Maps API key on Android, dev build). Another reason to move to a development build early rather than living in Expo Go.
 5. **react-native-chart-kit has no native dashed-line support** for the forecast overlay. Workarounds: render forecast as a second dataset with `withDots` styling, or use `propsForBackgroundLines`-style hacks, or fall back to victory-native. Prototype the chart early — it's on both dashboard and detail screens.
 
@@ -311,8 +320,6 @@ Things that will silently break the project or the dissertation if ignored. Read
 
 ## Future Work (Explicitly Not Building Now)
 
-- **Background step counting via Android Health Connect API.** `expo-sensors`' Pedometer has no background task support at all (confirmed against Expo's current official docs) — background location (Phase 2.4) uses `expo-task-manager`, which the pedometer module simply doesn't integrate with. Closing this gap means integrating Health Connect directly, a separate native-module/library undertaking, not an extension of the current `usePedometer()` hook. Worth pursuing as a dedicated task with real device-testing time budgeted, not bolted onto an existing session.
-
 - **Twice-daily check-ins (morning + evening).** Considered during Phase 2 implementation and deliberately deferred, not forgotten. Would require real schema/logic changes, not just a UI tweak: the `checkins` unique constraint would need a `period` dimension, the risk engine would need a merge policy for two same-day scores (average? worse-of-two? evening-weighted?), and the streak/forecaster/dashboard/agent (Phase 3 and 5) would all need to handle two data points per day instead of one. The EMA-frequency argument cuts both ways too: more frequent sampling is often more rigorous, but EMA compliance research also shows compliance drops as prompt frequency rises — a real risk in a population already prone to disengagement, potentially producing *worse* data rather than better. Kept as one check-in per day; worth citing in the dissertation's Future Work section with this reasoning rather than presenting it as unconsidered.
 
 ---
@@ -334,3 +341,55 @@ Things that will silently break the project or the dissertation if ignored. Read
 ## Build-Order Rationale (one paragraph you can reuse in the report)
 
 The system was built as successive vertical slices rather than in horizontal layers: the patient check-in loop first, because every downstream component (risk scoring, forecasting, dashboards, alerts, and the autonomous agent) consumes its output; the doctor-facing analytics second, since they require accumulated check-in data to be meaningful; and the AI layers last, because both the RAG chatbot and the agent depend on a stable schema, populated tables, and deployed Edge Function infrastructure. This ordering guaranteed a demonstrable end-to-end system at every milestone and localised risk to the newest slice.
+
+---
+
+## Dissertation Alignment Check — Chapters vs. Actual Implementation
+
+*Cross-checked against `RecovAI_Chapter1_Introduction_Problem_Stement_onward.docx`, `RecovAI_Chapter2_Literature_Review.docx`, and `RecovAI_Chapter3_Analysis.docx` after the Phase 2.4 background-location/Health-Connect session. Two kinds of drift found: places where the actual system now does **more** than what's written (exceeds an NFR/tool description), and places where the **mechanism** changed even though the described outcome still holds. Neither is a defect in the build — both need the chapters updated so implementation and specification agree, which examiners check directly.*
+
+### 1. Direct contradiction — needs a decision, not just an edit
+
+**NFR16** (Chapter 3, Table 3.9): *"Passive data collection shall be foreground-only in the prototype, degrading gracefully to self-report only when permission is denied."*
+
+This is now factually false for GPS specifically. Background zone monitoring was built and proven this session — a real `zone_breaches` row was written while the app was fully closed, confirmed via device testing (see Phase 2.4 above), using `expo-task-manager` + `Location.startLocationUpdatesAsync`. This wasn't a stretch goal quietly achieved; Development Plan.md's own Critical Caution #3 explicitly scoped background GPS *out* as unnecessary ("foreground-only tracking... is defensible") before this session began — the actual build now exceeds that original, deliberately conservative scope.
+
+Two honest options, not a foregone conclusion:
+- **Revise NFR16** to describe what's actually true: background location genuinely works; background *step counting* remains foreground-dependent-in-effect (steps are read from Health Connect's continuously-updated store, not counted by RecovAI's own process — see item 2 below). The real tradeoffs discovered this session (Android's mandatory persistent foreground-service notification, `ACCESS_BACKGROUND_LOCATION` as a separate permission grant, Samsung's own battery-optimisation layer independently capable of killing the service regardless of Android's standard permissions) are all genuine, citable implementation findings for the Testing/Evaluation chapter.
+- **Leave NFR16 as the original conservative requirement** and frame the background capability as exceeding spec — legitimate, but means explicitly stating in the report that the implementation surpassed its own requirement, which needs its own justification paragraph.
+
+Either is defensible; leaving the contradiction unaddressed is not.
+
+### 2. Mechanism changed, described outcome still (mostly) holds
+
+**FR5** (Chapter 3): *"The system shall collect step-count data passively via the device pedometer."* No longer literally accurate. `expo-sensors`' `Pedometer` was fully removed this session (confirmed: not in `package.json`) and replaced with **Android Health Connect** (`react-native-health-connect` + `expo-health-connect`) — steps are read via `aggregateRecord()` from an OS-level data store that other apps (Samsung Health, etc.) write into, not sampled directly from a device pedometer sensor by RecovAI's own code.
+
+This is a **better** architecture, not a downgrade — it's how genuinely continuous, background-inclusive step data becomes possible at all, since `expo-sensors`' `watchStepCount` was confirmed (via Expo's own current documentation) to have no background capability whatsoever. But the *mechanism* description needs updating: RecovAI does not itself passively sense steps in the background; it reads from a continuously-updated OS store that is populated by other apps regardless of whether RecovAI is open. Worth being precise about this distinction rather than letting "background collection" imply RecovAI is doing the sensing itself.
+
+Same nuance applies to two passages already in the chapters:
+- Chapter 1, Project Scope: *"the application collects GPS location and step counts in the background."*
+- Chapter 2, §2.6.1: *"This is the principle behind RecovAI's background collection of step counts and location."*
+
+Both are defensible in effect (the *outcome* — continuous data regardless of app state — is now genuinely true for GPS, and true-via-Health-Connect for steps) but neither currently distinguishes RecovAI's own background sensing (GPS) from reading an externally-populated store (steps). A precise sentence, not a rewrite, would resolve this.
+
+### 3. Chapter 3's technology table — missing and outdated rows
+
+The stack table (§3.8) needs updating:
+- **`Sensors | expo-sensors (Pedometer)`** row is now inaccurate — the package was removed entirely.
+- **Not listed at all**: `react-native-health-connect`, `expo-health-connect` (the actual step-data mechanism now), `expo-task-manager` (background task infrastructure), `expo-build-properties` (needed to bump `compileSdkVersion` for Health Connect's AndroidX dependency requirements).
+- **`Location | expo-location | ... foreground-only in the prototype`** — the "foreground-only" qualifier is now outdated per item 1 above.
+
+### 4. Confirmed consistent — no action needed
+
+Worth recording what was checked and found *already correct*, so this doesn't need re-checking later:
+- **Relapse logging** (FR35, Table 3.7, Use Case 3.1.1.7, the streak/sobriety-independence discussion in §3.1) — the dissertation's description matches the actual implementation precisely, including the non-conflation rationale. No drift.
+- **Danger zone taxonomy** (Phase 3.4's six zone types) matches the actual `risk_zones.zone_type` database check constraint exactly (`bar_nightclub`, `drug_market`, `friends_house`, `workplace`, `home`, `other`).
+- **NFR9** (zone-breach debounce) and **NFR8** (graceful degradation) — both genuinely implemented and tested this session (the debounce logic specifically survived a real bug hunt: an ordering flaw that let a single failed insert permanently "poison" the debounce state was found and fixed via live device testing, not code review — good Testing-chapter material in its own right).
+
+### 5. Stale content inside Development Plan.md itself — now fixed
+
+Per the request to check whether *earlier* implementations also drifted, not just today's — these were found and have since been corrected directly in this document:
+- **Critical Caution #2** (originally: "Pedometer behaves differently per platform... watch live counts → accumulate into AsyncStorage") described the original `expo-sensors`-based approach, abandoned in favour of Health Connect later in this same session. Now marked superseded with a pointer to the real account in Phase 2.4.
+- **Critical Caution #3** (originally: background GPS explicitly scoped out as unnecessary) is now marked superseded — background GPS was built and proven working.
+- **Section 2.4's own checklist text** was corrected at the time this drift was found (same session) — the Pedometer line now correctly points to the Health Connect entry instead of describing the abandoned `watchStepCount` approach.
+- **The "Future Work" section's Health Connect entry** was removed entirely, since what it described as future work is now done — superseded by Phase 2.4's detailed "Background step counting — resolved via Health Connect" entry.

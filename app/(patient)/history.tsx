@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { useActivityFeed, ActivityFeedItemType } from '../../lib/hooks/useActivityFeed';
-import { formatDateLabel, formatTime } from '../../lib/formatDate';
-import { MOCK_TODAY } from '../../lib/mockData';
+import { formatDateLabel, formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
+import { getMauritiusDateString } from '../../lib/mauritiusTime';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
 import { ActivityListSkeleton } from '../../components/skeletons/ActivityListSkeleton';
@@ -30,8 +30,9 @@ function yesterdayOf(dateStr: string): string {
 }
 
 function dayLabel(dateStr: string): string {
-  if (dateStr === MOCK_TODAY) return `Today — ${formatDateLabel(dateStr)}`;
-  if (dateStr === yesterdayOf(MOCK_TODAY)) return `Yesterday — ${formatDateLabel(dateStr)}`;
+  const today = getMauritiusDateString();
+  if (dateStr === today) return `Today — ${formatDateLabel(dateStr)}`;
+  if (dateStr === yesterdayOf(today)) return `Yesterday — ${formatDateLabel(dateStr)}`;
   return formatDateLabel(dateStr);
 }
 
@@ -49,8 +50,14 @@ export default function History() {
 
   const filtered = activeFilter === 'all' ? items : items.filter((item) => item.type === activeFilter);
 
-  const groups: { date: string; items: typeof filtered }[] = [];
-  for (const item of filtered) {
+  // Convert to device-local once, here, before it's used for anything —
+  // both the day grouping below and the displayed time need the same
+  // corrected value, or entries written between midnight and 4 AM
+  // Mauritius time silently land in the wrong day's group.
+  const localized = filtered.map((item) => ({ ...item, timestamp: toDeviceLocalIsoString(item.timestamp) }));
+
+  const groups: { date: string; items: typeof localized }[] = [];
+  for (const item of localized) {
     const date = item.timestamp.slice(0, 10);
     const group = groups[groups.length - 1];
     if (group && group.date === date) {

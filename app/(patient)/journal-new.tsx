@@ -5,16 +5,45 @@ import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { MOOD_LEVELS, MoodKey } from '../../lib/moodLevels';
+import { supabase } from '../../lib/supabase';
+import { useSession } from '../../lib/hooks/useSession';
+import { getMauritiusDateString } from '../../lib/mauritiusTime';
 
 const MAX_LENGTH = 2000;
 
-/** Screen 20 — New Journal Entry. Static UI; no real journal persistence yet. */
+/** Screen 20 — New Journal Entry. Saves to journal_entries. */
 export default function JournalNew() {
   const router = useRouter();
+  const { session } = useSession();
+  const patientId = session?.user.id;
   const [content, setContent] = useState('');
   const [mood, setMood] = useState<MoodKey>('great');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSave = content.trim().length > 0;
+  const canSave = content.trim().length > 0 && !isSubmitting;
+
+  const handleSave = async () => {
+    if (!canSave || !patientId) return;
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const { error } = await supabase.from('journal_entries').insert({
+      patient_id: patientId,
+      date: getMauritiusDateString(),
+      mood_level: mood,
+      content: content.trim(),
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    router.back();
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -24,9 +53,9 @@ export default function JournalNew() {
             <Ionicons name="close" size={24} color={colors.textDark} />
           </Pressable>
           <Text className="text-lg font-bold text-text-dark">New Entry</Text>
-          <Pressable onPress={() => canSave && router.back()} className="h-9 items-center justify-center">
+          <Pressable onPress={handleSave} disabled={!canSave} className="h-9 items-center justify-center">
             <Text className="text-base font-semibold" style={{ color: canSave ? colors.primary : colors.textMuted }}>
-              Save
+              {isSubmitting ? 'Saving...' : 'Save'}
             </Text>
           </Pressable>
         </View>
@@ -35,6 +64,12 @@ export default function JournalNew() {
           <Text className="text-sm text-text-dark">May 24, 2025</Text>
           <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
         </View>
+
+        {errorMessage && (
+          <Text className="mt-3 text-center text-sm" style={{ color: colors.riskHigh }}>
+            {errorMessage}
+          </Text>
+        )}
 
         <View className="mt-4 flex-1 rounded-xl bg-card p-4">
           <TextInput

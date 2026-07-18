@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { useCheckIns } from './useCheckIns';
 import { useRiskZones } from './useRiskZones';
-import { useAlerts } from './useAlerts';
+import { usePatientAlerts } from './usePatientAlerts';
 import { useJournalEntries } from './useJournalEntries';
-import { PATIENT_ID } from '../mockData';
+import { useZoneBreaches } from './useZoneBreaches';
 
 export type ActivityFeedItemType = 'checkin' | 'zone' | 'alert' | 'journal';
 
@@ -28,15 +28,16 @@ const ALERT_LABELS: Record<string, { title: string; subtitle: string }> = {
 
 /**
  * Unified, sorted activity feed for the patient History screen —
- * combines useCheckIns/useRiskZones/useAlerts/useJournalEntries instead
- * of duplicating their mock data. A genuine combinator, not a new mock
- * data source: every field here traces back to one of those hooks.
+ * combines useCheckIns/useRiskZones/usePatientAlerts/useJournalEntries
+ * instead of duplicating their mock data. A genuine combinator, not a new
+ * mock data source: every field here traces back to one of those hooks.
  */
-export function useActivityFeed(patientId: string = PATIENT_ID): { data: ActivityFeedItem[]; isLoading: boolean; error: null } {
+export function useActivityFeed(patientId?: string): { data: ActivityFeedItem[]; isLoading: boolean; error: null } {
   const { data: checkIns } = useCheckIns(patientId);
   const { data: riskZones } = useRiskZones(patientId);
-  const { data: alerts } = useAlerts();
+  const { data: alerts } = usePatientAlerts(patientId);
   const { data: journalEntries } = useJournalEntries(patientId);
+  const { data: zoneBreaches } = useZoneBreaches(patientId);
 
   const items: ActivityFeedItem[] = [];
 
@@ -53,26 +54,23 @@ export function useActivityFeed(patientId: string = PATIENT_ID): { data: Activit
     });
   }
 
-  // No per-visit zone timestamps exist yet (RiskZone is a static definition,
-  // not a logged event) — anchor the one "safe zone" status entry to
-  // today's check-in, mirroring what check-in.tsx already shows passively
-  // ("Location: Safe Zone") rather than inventing a new timestamp.
-  const todayCheckIn = checkIns[checkIns.length - 1];
-  const homeZone = riskZones.find((z) => z.classification === 'safe');
-  if (homeZone && todayCheckIn) {
+  for (const breach of zoneBreaches) {
+    const zone = riskZones.find((z) => z.id === breach.zoneId);
+    if (!zone) continue; // zone since deleted — nothing to label this breach with
+    const isRisk = zone.classification === 'risk';
     items.push({
-      id: `zone-${homeZone.id}`,
+      id: `zone-${breach.id}`,
       type: 'zone',
-      title: 'Entered safe zone',
-      subtitle: homeZone.label,
-      timestamp: todayCheckIn.createdAt,
+      title: isRisk ? 'Entered risk zone' : 'Entered safe zone',
+      subtitle: zone.label,
+      timestamp: breach.detectedAt,
       icon: 'location',
-      iconColor: colors.secondary,
-      iconBg: colors.secondaryBg,
+      iconColor: isRisk ? colors.riskHigh : colors.secondary,
+      iconBg: isRisk ? colors.riskHighBg : colors.secondaryBg,
     });
   }
 
-  for (const alert of alerts.filter((a) => a.patientId === patientId)) {
+  for (const alert of alerts) {
     const label = ALERT_LABELS[alert.type] ?? { title: alert.type, subtitle: '' };
     items.push({
       id: `alert-${alert.id}`,

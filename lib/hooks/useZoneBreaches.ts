@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { JournalEntry, MoodKey } from '../types';
+import { ZoneBreach } from '../types';
 import { supabase } from '../supabase';
 import { useSession } from './useSession';
 
-/** Same shape everywhere so swapping in a real Supabase query later never changes calling code. */
-export function useJournalEntries(patientId?: string): { data: JournalEntry[]; isLoading: boolean; error: null } {
+/** Same shape as useCheckIns — patientId defaults to the current session user. */
+export function useZoneBreaches(patientId?: string): { data: ZoneBreach[]; isLoading: boolean; error: null } {
   const { session } = useSession();
   const resolvedPatientId = patientId ?? session?.user.id;
 
-  const [data, setData] = useState<JournalEntry[]>([]);
+  const [data, setData] = useState<ZoneBreach[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -22,20 +22,18 @@ export function useJournalEntries(patientId?: string): { data: JournalEntry[]; i
     setIsLoading(true);
 
     supabase
-      .from('journal_entries')
+      .from('zone_breaches')
       .select('*')
       .eq('patient_id', resolvedPatientId)
-      .order('date', { ascending: false })
+      .order('detected_at', { ascending: false })
       .then(({ data: rows }) => {
         if (!isMounted) return;
         setData(
           (rows ?? []).map((row) => ({
             id: row.id,
             patientId: row.patient_id,
-            date: row.date,
-            moodLevel: row.mood_level as MoodKey,
-            text: row.content,
-            createdAt: row.created_at,
+            zoneId: row.zone_id,
+            detectedAt: row.detected_at,
           }))
         );
         setIsLoading(false);

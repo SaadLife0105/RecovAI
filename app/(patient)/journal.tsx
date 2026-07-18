@@ -6,7 +6,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { getMoodLevel } from '../../lib/moodLevels';
 import { useJournalEntries } from '../../lib/hooks/useJournalEntries';
-import { formatDateLabel, formatTime } from '../../lib/formatDate';
+import { formatDateLabel, formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
 
@@ -69,7 +69,7 @@ export default function Journal() {
                     <View className="ml-3 flex-1">
                       <View className="flex-row items-center justify-between">
                         <Text className="text-sm font-semibold text-text-dark">{formatDateLabel(entry.date)}</Text>
-                        <Text className="text-xs text-text-muted">{formatTime(entry.createdAt)}</Text>
+                        <Text className="text-xs text-text-muted">{formatTime(toDeviceLocalIsoString(entry.createdAt))}</Text>
                       </View>
                       <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
                         {entry.text}
