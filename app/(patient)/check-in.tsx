@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { openHealthConnectSettings } from 'react-native-health-connect';
 import { colors } from '../../constants/theme';
 import { RatingSlider } from '../../components/sliders/RatingSlider';
 import { Card } from '../../components/cards/Card';
@@ -33,6 +34,7 @@ export default function CheckIn() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [relapseModalOpen, setRelapseModalOpen] = useState(false);
   const [isLoggingRelapse, setIsLoggingRelapse] = useState(false);
+  const [stepsTipDismissed, setStepsTipDismissed] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -225,6 +227,27 @@ export default function CheckIn() {
               <Text className="mt-1 text-xs text-text-muted">
                 Location unavailable — {passive.zonePermissionDenied ? 'permission not granted' : 'no signal'}
               </Text>
+            )}
+            {passive.stepsAvailable && passive.steps === 0 && !stepsTipDismissed && (
+              <View className="mt-2 flex-row items-start justify-between">
+                <Text className="mr-2 flex-1 text-xs text-text-muted">
+                  Not seeing steps? Make sure your phone's health app (e.g. Samsung Health) is sharing data with
+                  Health Connect.{' '}
+                  <Text className="text-xs font-medium text-text-muted underline" onPress={() => openHealthConnectSettings()}>
+                    Open Health Connect
+                  </Text>
+                  {'\n'}
+                  <Text
+                    className="text-xs font-medium text-text-muted underline"
+                    onPress={() => router.push('/(patient)/steps-help')}
+                  >
+                    Need more help?
+                  </Text>
+                </Text>
+                <Pressable onPress={() => setStepsTipDismissed(true)} hitSlop={8}>
+                  <Ionicons name="close" size={14} color={colors.textMuted} />
+                </Pressable>
+              </View>
             )}
           </Card>
 

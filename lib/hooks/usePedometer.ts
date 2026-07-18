@@ -25,14 +25,18 @@ export function usePedometer(): PedometerResult {
 
     const fetchToday = async () => {
       try {
+        const startTime = getMauritiusStartOfDayIso();
+        const endTime = new Date().toISOString();
+        console.log('HC query window:', startTime, 'to', endTime);
         const result = await aggregateRecord({
           recordType: 'Steps',
           timeRangeFilter: {
             operator: 'between',
-            startTime: getMauritiusStartOfDayIso(),
-            endTime: new Date().toISOString(),
+            startTime,
+            endTime,
           },
         });
+        console.log('HC raw result:', JSON.stringify(result));
         if (isMounted) setSteps(result.COUNT_TOTAL);
       } catch {
         // transient read failure — keep showing the last known total
@@ -42,6 +46,7 @@ export function usePedometer(): PedometerResult {
     (async () => {
       try {
         const available = await initialize();
+        console.log('HC available:', available);
         if (!isMounted) return;
         if (!available) {
           setIsAvailable(false);
@@ -50,6 +55,7 @@ export function usePedometer(): PedometerResult {
         setIsAvailable(true);
 
         const granted = await requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
+        console.log('HC granted:', JSON.stringify(granted));
         if (!isMounted) return;
         if (!granted.some((p) => p.recordType === 'Steps')) {
           setPermissionDenied(true);
