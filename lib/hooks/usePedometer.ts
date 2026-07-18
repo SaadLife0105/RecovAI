@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { initialize, requestPermission, aggregateRecord } from 'react-native-health-connect';
+import { initialize, getGrantedPermissions, requestPermission, aggregateRecord } from 'react-native-health-connect';
 import { getMauritiusStartOfDayIso } from '../mauritiusTime';
 
 interface PedometerResult {
@@ -27,7 +27,6 @@ export function usePedometer(): PedometerResult {
       try {
         const startTime = getMauritiusStartOfDayIso();
         const endTime = new Date().toISOString();
-        console.log('HC query window:', startTime, 'to', endTime);
         const result = await aggregateRecord({
           recordType: 'Steps',
           timeRangeFilter: {
@@ -36,7 +35,6 @@ export function usePedometer(): PedometerResult {
             endTime,
           },
         });
-        console.log('HC raw result:', JSON.stringify(result));
         if (isMounted) setSteps(result.COUNT_TOTAL);
       } catch {
         // transient read failure — keep showing the last known total
@@ -46,7 +44,6 @@ export function usePedometer(): PedometerResult {
     (async () => {
       try {
         const available = await initialize();
-        console.log('HC available:', available);
         if (!isMounted) return;
         if (!available) {
           setIsAvailable(false);
@@ -54,10 +51,17 @@ export function usePedometer(): PedometerResult {
         }
         setIsAvailable(true);
 
-        const granted = await requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
-        console.log('HC granted:', JSON.stringify(granted));
+        const standingPermissions = await getGrantedPermissions();
         if (!isMounted) return;
-        if (!granted.some((p) => p.recordType === 'Steps')) {
+
+        let hasStepsPermission = standingPermissions.some((p) => p.recordType === 'Steps');
+        if (!hasStepsPermission) {
+          const granted = await requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
+          if (!isMounted) return;
+          hasStepsPermission = granted.some((p) => p.recordType === 'Steps');
+        }
+
+        if (!hasStepsPermission) {
           setPermissionDenied(true);
           return;
         }

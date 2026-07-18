@@ -12,6 +12,8 @@ import { haversineDistanceMeters } from './geo';
 
 export const BACKGROUND_ZONE_TASK = 'recovai-background-zone-monitor';
 
+const INSIDE_ZONE_IDS_KEY = 'backgroundZoneMonitor:insideZoneIds';
+
 TaskManager.defineTask(BACKGROUND_ZONE_TASK, async ({ data, error }) => {
   if (error) {
     console.warn('Background zone task error:', error.message);
@@ -35,8 +37,7 @@ TaskManager.defineTask(BACKGROUND_ZONE_TASK, async ({ data, error }) => {
   // Debounce state persisted to AsyncStorage — this task can't see the
   // foreground hook's in-memory Set (different execution context), so it
   // keeps its own persisted "currently inside" state.
-  const storageKey = 'backgroundZoneMonitor:insideZoneIds';
-  const stored = await AsyncStorage.getItem(storageKey);
+  const stored = await AsyncStorage.getItem(INSIDE_ZONE_IDS_KEY);
   const insideSet = new Set<string>(stored ? JSON.parse(stored) : []);
 
   for (const zone of zones) {
@@ -45,25 +46,39 @@ TaskManager.defineTask(BACKGROUND_ZONE_TASK, async ({ data, error }) => {
     const wasInside = insideSet.has(zone.id);
 
     if (inside && !wasInside) {
-      insideSet.add(zone.id);
+      // insideSet is only updated AFTER a successful insert — adding it
+      // beforehand meant a single failed insert permanently "poisoned" the
+      // debounce state as already-inside, silently blocking every retry
+      // until a genuine exit+re-entry.
       const { error: insertError } = await supabase
         .from('zone_breaches')
         .insert({ patient_id: patientId, zone_id: zone.id });
-      if (insertError) console.warn('Background zone_breaches insert failed:', insertError.message);
+      if (insertError) {
+        console.warn('Background zone_breaches insert failed:', insertError.message);
+      } else {
+        insideSet.add(zone.id);
+      }
     } else if (!inside && wasInside) {
       insideSet.delete(zone.id);
     }
   }
 
-  await AsyncStorage.setItem(storageKey, JSON.stringify([...insideSet]));
+  await AsyncStorage.setItem(INSIDE_ZONE_IDS_KEY, JSON.stringify([...insideSet]));
 });
 
 export async function registerBackgroundLocationTaskAsync(): Promise<boolean> {
   const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
   if (bgStatus !== 'granted') return false;
 
-  const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_ZONE_TASK);
-  if (alreadyRegistered) return true;
+  // Unconditional stop-then-start: a registered-but-not-started task (a
+  // zombie left behind by a crashed prior attempt) would otherwise get
+  // skipped forever by a simple "already registered" check. stopLocationUpdatesAsync
+  // throws harmlessly if nothing was actually running.
+  try {
+    await Location.stopLocationUpdatesAsync(BACKGROUND_ZONE_TASK);
+  } catch {
+    // nothing was running — expected on a clean first start
+  }
 
   await Location.startLocationUpdatesAsync(BACKGROUND_ZONE_TASK, {
     accuracy: Location.Accuracy.Balanced,
@@ -75,5 +90,6 @@ export async function registerBackgroundLocationTaskAsync(): Promise<boolean> {
       notificationBody: 'Monitoring your location for your recovery plan.',
     },
   });
+
   return true;
 }
