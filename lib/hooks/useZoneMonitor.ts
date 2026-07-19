@@ -3,11 +3,22 @@ import * as Location from 'expo-location';
 import { haversineDistanceMeters } from '../geo';
 import { useRiskZones } from './useRiskZones';
 
+type ZoneClassification = 'safe' | 'low_risk' | 'medium_risk' | 'high_risk';
+
 interface ZoneMonitorResult {
-  currentZoneStatus: 'safe' | 'risk' | null;
+  currentZoneStatus: ZoneClassification | null;
   isAvailable: boolean;
   permissionDenied: boolean;
 }
+
+// Most dangerous zone wins when inside overlapping zones — explicit priority
+// order rather than relying on enum declaration order.
+const ZONE_PRIORITY: Record<ZoneClassification, number> = {
+  safe: 0,
+  low_risk: 1,
+  medium_risk: 2,
+  high_risk: 3,
+};
 
 /**
  * Android-only foreground zone-proximity watcher — display-only, drives
@@ -16,7 +27,7 @@ interface ZoneMonitorResult {
  */
 export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
   const { data: zones } = useRiskZones(patientId);
-  const [currentZoneStatus, setCurrentZoneStatus] = useState<'safe' | 'risk' | null>(null);
+  const [currentZoneStatus, setCurrentZoneStatus] = useState<ZoneClassification | null>(null);
   const [isAvailable, setIsAvailable] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
 
@@ -41,12 +52,25 @@ export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
 
       // Foreground watcher only — deliberately no background location, per
       // Development Plan.md's Critical Caution on background location scope.
+      // High accuracy (not Balanced): Balanced targets ~100m (Android's own
+      // "city block" tier, often WiFi/cell-based rather than GPS), which is
+      // larger than the smallest zone radius (50m) this app allows — a zone
+      // smaller than the position noise itself can't be reliably detected.
+      // High targets ~10m and actually uses GPS. This hook is foreground-only
+      // already, so the extra power draw only accrues while the app is open,
+      // not as a 24/7 background cost.
       subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 20 },
+        { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 20 },
         (pos) => {
-          const { latitude, longitude } = pos.coords;
+          const { latitude, longitude, accuracy } = pos.coords;
 
           for (const zone of zones) {
+            // Skip zones where the GPS reading's own reported uncertainty is
+            // looser than the zone's radius — a low-confidence position isn't
+            // a reliable basis for an in/out call on a small zone. Keep
+            // whatever membership state we already had rather than guess.
+            if (accuracy !== null && accuracy > zone.radiusM) continue;
+
             const inside = haversineDistanceMeters(latitude, longitude, zone.lat, zone.lng) <= zone.radiusM;
             const wasInside = insideRef.current.has(zone.id);
 
@@ -62,15 +86,13 @@ export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
             }
           }
 
-          // 'risk' wins over 'safe' when inside overlapping zones.
-          let status: 'safe' | 'risk' | null = null;
+          // Most dangerous zone wins when inside overlapping zones.
+          let status: ZoneClassification | null = null;
           for (const zone of zones) {
             if (insideRef.current.has(zone.id)) {
-              if (zone.classification === 'risk') {
-                status = 'risk';
-                break;
+              if (status === null || ZONE_PRIORITY[zone.classification] > ZONE_PRIORITY[status]) {
+                status = zone.classification;
               }
-              status = 'safe';
             }
           }
           if (isMounted) setCurrentZoneStatus(status);

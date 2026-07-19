@@ -1,17 +1,45 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
-import { useRiskZones } from '../../lib/hooks/useRiskZones';
+import { EmptyStateCard } from '../../components/cards/EmptyStateCard';
+import { useRiskZones, deleteRiskZone } from '../../lib/hooks/useRiskZones';
 import { ZONE_TYPE_META } from '../../lib/zoneTypes';
 
-/** Screen 12 — Risk Zones (Doctor). Zone CRUD (add/edit/delete) still lands in Phase 3.4 (see docs/Development Plan.md) — this list is read-only. */
+// 4-level classification gradient (riskLow→moodOkay→riskMedium→riskHigh) —
+// matches the patient-facing zone chip and the add-zone selector.
+const ZONE_STATUS_META: Record<
+  'safe' | 'low_risk' | 'medium_risk' | 'high_risk',
+  { label: string; color: string; bg: string }
+> = {
+  safe: { label: 'Safe', color: colors.riskLow, bg: colors.riskLowBg },
+  low_risk: { label: 'Low Risk', color: colors.moodOkay, bg: colors.moodOkayBg },
+  medium_risk: { label: 'Medium Risk', color: colors.riskMedium, bg: colors.riskMediumBg },
+  high_risk: { label: 'High Risk', color: colors.riskHigh, bg: colors.riskHighBg },
+};
+
+/** Screen 12 — Risk Zones (Doctor). Scoped to one patient; zone add/delete lands here in Phase 3.4. */
 export default function RiskZones() {
   const router = useRouter();
-  const { data: zones } = useRiskZones();
+  const { patientId, patientName } = useLocalSearchParams<{ patientId: string; patientName: string }>();
+  const { data: zones, refetch } = useRiskZones(patientId);
+
+  const confirmDelete = (zoneId: string) => {
+    Alert.alert('Delete this zone?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteRiskZone(zoneId);
+          refetch();
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -21,31 +49,63 @@ export default function RiskZones() {
             <Pressable onPress={() => router.back()} className="h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
-            <Text className="text-xl font-bold text-text-dark">Risk Zones</Text>
-            <Pressable className="h-9 w-9 items-center justify-center">
+            <View className="items-center">
+              <Text className="text-xl font-bold text-text-dark">Risk Zones</Text>
+              <Text className="text-xs text-text-muted">{patientName}</Text>
+            </View>
+            <Pressable
+              onPress={() => router.push({ pathname: '/(doctor)/add-zone', params: { patientId, patientName } })}
+              className="h-9 w-9 items-center justify-center"
+            >
               <Ionicons name="add" size={24} color={colors.textDark} />
             </Pressable>
           </View>
 
-          <Text className="mb-2 mt-6 text-sm font-semibold text-text-dark">Your Zones</Text>
-          {zones.map((zone) => {
-            const meta = ZONE_TYPE_META[zone.zoneType];
-            return (
-              <View key={zone.id} className="mb-3 flex-row items-center rounded-2xl bg-card p-4">
-                <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: meta.bg }}>
-                  <Ionicons name={meta.icon} size={18} color={meta.color} />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text className="text-sm font-semibold text-text-dark">{zone.label}</Text>
-                  <Text className="mt-0.5 text-xs text-text-muted">Radius: {zone.radiusM}m</Text>
-                </View>
-                <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-              </View>
-            );
-          })}
+          {zones.length === 0 ? (
+            <View className="mt-6">
+              <EmptyStateCard
+                illustration={require('../../assets/illustrations/18-map-with-circular-geofence-around-pin.png')}
+                title="No zones yet"
+                subtitle="Add risk or safe zones to help detect when this patient enters an area of concern."
+              />
+            </View>
+          ) : (
+            <>
+              <Text className="mb-2 mt-6 text-sm font-semibold text-text-dark">Your Zones</Text>
+              {zones.map((zone) => {
+                // zone_type is now optional — omit the type icon when absent
+                // (the label is the primary identifier), rather than a fallback.
+                const typeMeta = zone.zoneType ? ZONE_TYPE_META[zone.zoneType] : null;
+                const statusMeta = ZONE_STATUS_META[zone.classification];
+                return (
+                  <View key={zone.id} className="mb-3 flex-row items-center rounded-2xl bg-card p-4">
+                    {typeMeta ? (
+                      <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: typeMeta.bg }}>
+                        <Ionicons name={typeMeta.icon} size={18} color={typeMeta.color} />
+                      </View>
+                    ) : null}
+                    <View className={`flex-1 ${typeMeta ? 'ml-3' : ''}`}>
+                      <Text className="text-sm font-semibold text-text-dark">{zone.label}</Text>
+                      <View className="mt-1 flex-row items-center">
+                        <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: statusMeta.bg }}>
+                          <Text className="text-[11px] font-semibold" style={{ color: statusMeta.color }}>
+                            {statusMeta.label}
+                          </Text>
+                        </View>
+                        <Text className="ml-2 text-xs text-text-muted">Radius: {zone.radiusM}m</Text>
+                      </View>
+                    </View>
+                    <Pressable onPress={() => confirmDelete(zone.id)} className="h-9 w-9 items-center justify-center">
+                      <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </>
+          )}
 
           <Pressable
-            onPress={() => router.push('/(doctor)/add-zone')}
+            onPress={() => router.push({ pathname: '/(doctor)/add-zone', params: { patientId, patientName } })}
             className="mt-2 items-center rounded-2xl border-2 py-4"
             style={{ borderColor: colors.secondary }}
           >

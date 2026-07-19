@@ -19,6 +19,19 @@ export interface ActivityFeedItem {
   iconBg: string;
 }
 
+// 4-level zone-breach labeling. Note low_risk deliberately uses moodOkay (not
+// riskLow, which is reserved for "safe") to match the
+// Safe→Low→Medium→High = riskLow→moodOkay→riskMedium→riskHigh gradient.
+const ZONE_BREACH_META: Record<
+  'safe' | 'low_risk' | 'medium_risk' | 'high_risk',
+  { title: string; iconColor: string; iconBg: string }
+> = {
+  safe: { title: 'Entered safe zone', iconColor: colors.secondary, iconBg: colors.secondaryBg },
+  low_risk: { title: 'Entered low-risk zone', iconColor: colors.moodOkay, iconBg: colors.moodOkayBg },
+  medium_risk: { title: 'Entered medium-risk zone', iconColor: colors.riskMedium, iconBg: colors.riskMediumBg },
+  high_risk: { title: 'Entered high-risk zone', iconColor: colors.riskHigh, iconBg: colors.riskHighBg },
+};
+
 const ALERT_LABELS: Record<string, { title: string; subtitle: string }> = {
   high_risk: { title: 'High risk score', subtitle: 'Risk score is elevated' },
   missed_checkin: { title: 'Missed check-in', subtitle: 'No check-in logged' },
@@ -57,16 +70,16 @@ export function useActivityFeed(patientId?: string): { data: ActivityFeedItem[];
   for (const breach of zoneBreaches) {
     const zone = riskZones.find((z) => z.id === breach.zoneId);
     if (!zone) continue; // zone since deleted — nothing to label this breach with
-    const isRisk = zone.classification === 'risk';
+    const zoneMeta = ZONE_BREACH_META[zone.classification];
     items.push({
       id: `zone-${breach.id}`,
       type: 'zone',
-      title: isRisk ? 'Entered risk zone' : 'Entered safe zone',
+      title: zoneMeta.title,
       subtitle: zone.label,
       timestamp: breach.detectedAt,
       icon: 'location',
-      iconColor: isRisk ? colors.riskHigh : colors.secondary,
-      iconBg: isRisk ? colors.riskHighBg : colors.secondaryBg,
+      iconColor: zoneMeta.iconColor,
+      iconBg: zoneMeta.iconBg,
     });
   }
 

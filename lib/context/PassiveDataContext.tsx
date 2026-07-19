@@ -6,7 +6,7 @@ interface PassiveData {
   steps: number;
   stepsAvailable: boolean;
   stepsPermissionDenied: boolean;
-  currentZoneStatus: 'safe' | 'risk' | null;
+  currentZoneStatus: 'safe' | 'low_risk' | 'medium_risk' | 'high_risk' | null;
   zoneAvailable: boolean;
   zonePermissionDenied: boolean;
 }

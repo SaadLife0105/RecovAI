@@ -10,7 +10,7 @@ describe('computeRiskScore', () => {
       sleep: 10,
       isolated: false,
       steps: 5000,
-      nearRiskZone: false,
+      zoneDangerLevel: 'safe',
     };
     expect(computeRiskScore(inputs, 'cannabis')).toBe(0);
   });
@@ -25,7 +25,7 @@ describe('computeRiskScore', () => {
       sleep: 0,
       isolated: true,
       steps: 500,
-      nearRiskZone: true,
+      zoneDangerLevel: 'high_risk',
     };
     const breakdown = computeBreakdown(inputs, 'cannabis');
     expect(breakdown.base).toBe(100);
@@ -40,7 +40,7 @@ describe('computeRiskScore', () => {
       sleep: 0,
       isolated: true,
       steps: 500,
-      nearRiskZone: true,
+      zoneDangerLevel: 'high_risk',
     };
     const breakdown = computeBreakdown(inputs, 'heroin_opioids');
     expect(breakdown.base * breakdown.sensitivityMultiplier).toBeCloseTo(115, 10);
@@ -57,7 +57,7 @@ describe('computeRiskScore', () => {
       sleep: 10,
       isolated: true,
       steps: 5000,
-      nearRiskZone: false,
+      zoneDangerLevel: 'safe',
     };
     expect(computeRiskScore(inputs, 'cannabis')).toBe(15);
   });
@@ -72,10 +72,46 @@ describe('computeRiskScore', () => {
       sleep: 5,
       isolated: false,
       steps: 5000,
-      nearRiskZone: false,
+      zoneDangerLevel: 'safe',
     };
     const cannabisScore = computeRiskScore(inputs, 'cannabis');
     const heroinScore = computeRiskScore(inputs, 'heroin_opioids');
     expect(heroinScore).toBeCloseTo(cannabisScore * 1.15, 10);
+  });
+
+  it('low_risk zone contributes exactly 3', () => {
+    const inputs: RiskInputs = {
+      craving: 0,
+      mood: 10,
+      sleep: 10,
+      isolated: false,
+      steps: 5000,
+      zoneDangerLevel: 'low_risk',
+    };
+    expect(computeBreakdown(inputs, 'cannabis').zoneProximityContribution).toBe(3);
+  });
+
+  it('medium_risk zone contributes exactly 6', () => {
+    const inputs: RiskInputs = {
+      craving: 0,
+      mood: 10,
+      sleep: 10,
+      isolated: false,
+      steps: 5000,
+      zoneDangerLevel: 'medium_risk',
+    };
+    expect(computeBreakdown(inputs, 'cannabis').zoneProximityContribution).toBe(6);
+  });
+
+  it('null zone contributes exactly 0 (same as safe)', () => {
+    const inputs: RiskInputs = {
+      craving: 0,
+      mood: 10,
+      sleep: 10,
+      isolated: false,
+      steps: 5000,
+      zoneDangerLevel: null,
+    };
+    expect(computeBreakdown(inputs, 'cannabis').zoneProximityContribution).toBe(0);
   });
 });

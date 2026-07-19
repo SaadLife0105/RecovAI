@@ -6,12 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/theme';
 import { RiskGauge } from '../../../components/gauges/RiskGauge';
 import { MiniSparkline } from '../../../components/sparklines/MiniSparkline';
+import { RiskTrendChart } from '../../../components/charts/RiskTrendChart';
 import { AlertRow } from '../../../components/cards/AlertRow';
 import { SOSButton } from '../../../components/sos/SOSButton';
 import { ArchivePatientModal } from '../../../components/modals/ArchivePatientModal';
 import { useDoctorNote } from '../../../lib/hooks/useDoctorNote';
-import { usePatientDetail } from '../../../lib/hooks/usePatientDetail';
-import { formatTimestamp } from '../../../lib/formatDate';
+import { usePatientDetail, setPatientArchived } from '../../../lib/hooks/usePatientDetail';
+import { usePatientAlertsForDoctor } from '../../../lib/hooks/usePatientAlertsForDoctor';
+import { ALERT_TYPE_META, FALLBACK_ALERT_META, dayLabel } from '../../../lib/alertMeta';
+import { formatTimestamp, formatTime, toDeviceLocalIsoString } from '../../../lib/formatDate';
 
 const TABS = ['Overview', 'Check-ins', 'Alerts', 'Zones', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
@@ -29,8 +32,33 @@ export default function PatientDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const { data: patient } = usePatientDetail(id);
   const { data: note } = useDoctorNote(id);
+  const { data: alerts } = usePatientAlertsForDoctor(id);
+
+  const recentAlerts = alerts.slice(0, 3);
+  const latestAlert = alerts[0];
+  const xai = latestAlert?.xaiExplanation ?? null;
+
+  const confirmArchive = async () => {
+    const { error } = await setPatientArchived(id, true);
+    if (error) {
+      setArchiveError(error);
+      return;
+    }
+    setArchiveModalOpen(false);
+    router.back();
+  };
+
+  const handleRestore = async () => {
+    const { error } = await setPatientArchived(id, false);
+    if (error) {
+      setArchiveError(error);
+      return;
+    }
+    router.back();
+  };
 
   if (!patient) {
     return (
@@ -83,7 +111,11 @@ export default function PatientDetail() {
                 return (
                   <Pressable
                     key={tab}
-                    onPress={() => setActiveTab(tab)}
+                    onPress={() =>
+                      tab === 'Zones'
+                        ? router.push({ pathname: '/(doctor)/zones', params: { patientId: patient.id, patientName: patient.name } })
+                        : setActiveTab(tab)
+                    }
                     className="rounded-full px-4 py-2"
                     style={{ backgroundColor: isActive ? colors.secondary : colors.card }}
                   >
@@ -121,7 +153,8 @@ export default function PatientDetail() {
                           className="ml-1 text-base font-bold"
                           style={{ color: patient.trendDelta >= 0 ? colors.riskHighText : colors.riskLowText }}
                         >
-                          {patient.trendDelta}
+                          {patient.trendDelta >= 0 ? '+' : ''}
+                          {patient.trendDelta.toFixed(1)}
                         </Text>
                       </View>
                       <Text className="text-xs text-text-muted">from last 7 days</Text>
@@ -135,77 +168,135 @@ export default function PatientDetail() {
                 </View>
               </View>
 
-              <View className="mt-4 flex-row items-center rounded-2xl p-4" style={{ backgroundColor: colors.riskHighBg }}>
-                <Image
-                  source={require('../../../assets/illustrations/49-ai-brain-ai-insights.png')}
-                  style={{ width: 40, height: 40 }}
-                  resizeMode="contain"
-                />
-                <View className="ml-3 flex-1">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-sm font-bold" style={{ color: colors.riskHighText }}>
-                      AI Analysis
-                    </Text>
-                    <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: colors.riskHigh }}>
-                      <Text className="text-[10px] font-semibold text-white">High Risk</Text>
-                    </View>
+              <View className="mt-4 rounded-2xl bg-card p-4">
+                <Text className="mb-3 text-sm font-semibold text-text-dark">Risk Trend & Forecast</Text>
+                <RiskTrendChart history={patient.trendData} forecast={patient.forecast} width={300} height={160} />
+                <View className="mt-3 flex-row items-center gap-4">
+                  <View className="flex-row items-center">
+                    <View className="mr-2 h-0.5 w-5" style={{ backgroundColor: colors.secondary }} />
+                    <Text className="text-[11px] text-text-muted">Actual</Text>
                   </View>
-                  <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
-                    Increased late-night phone usage and time spent in high-risk zones detected. Recommend extra
-                    check-ins and encouraging healthy routines.
-                  </Text>
+                  <View className="flex-row items-center">
+                    <View
+                      className="mr-2 h-0 w-5"
+                      style={{ borderTopWidth: 2, borderStyle: 'dashed', borderColor: colors.riskMedium }}
+                    />
+                    <Text className="text-[11px] text-text-muted">Forecasted</Text>
+                  </View>
                 </View>
               </View>
 
+              {xai !== null ? (
+                <View className="mt-4 flex-row items-center rounded-2xl p-4" style={{ backgroundColor: colors.riskHighBg }}>
+                  <Image
+                    source={require('../../../assets/illustrations/49-ai-brain-ai-insights.png')}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="contain"
+                  />
+                  <View className="ml-3 flex-1">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-sm font-bold" style={{ color: colors.riskHighText }}>
+                        AI Analysis
+                      </Text>
+                      <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: colors.riskHigh }}>
+                        <Text className="text-[10px] font-semibold text-white">
+                          {latestAlert.urgency === 'high' ? 'High Risk' : latestAlert.urgency === 'medium' ? 'Medium' : 'Low'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
+                      {xai}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View className="mt-4 flex-row items-center rounded-2xl p-4" style={{ backgroundColor: colors.surface }}>
+                  <Image
+                    source={require('../../../assets/illustrations/49-ai-brain-ai-insights.png')}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="contain"
+                  />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-sm font-bold text-text-dark">AI Analysis</Text>
+                    <Text className="mt-1 text-xs text-text-muted">
+                      AI-generated explanations will appear here once a risk alert has enough context.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               <View className="mb-2 mt-6 flex-row items-center justify-between">
                 <Text className="text-sm font-semibold text-text-dark">Recent Alerts</Text>
-                <Pressable>
+                <Pressable onPress={() => setActiveTab('Alerts')}>
                   <Text className="text-xs font-semibold" style={{ color: colors.secondary }}>
                     View All
                   </Text>
                 </Pressable>
               </View>
-              <AlertRow
-                dotColor={colors.riskHigh}
-                title="High risk score predicted"
-                message="Risk score is 72 (High)"
-                meta="Today, 8:30 AM"
-              />
-              <AlertRow
-                dotColor={colors.riskMedium}
-                title="Missed check-in"
-                message="No check-in for 1 day"
-                meta="Yesterday, 9:20 AM"
-              />
-              <AlertRow
-                dotColor={colors.riskMedium}
-                title="Zone breach"
-                message="Entered risk zone: Downtown Bar"
-                meta="Yesterday, 6:45 PM"
-              />
+              {recentAlerts.length > 0 ? (
+                recentAlerts.map((alert) => {
+                  const typeMeta = ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META;
+                  const localCreatedAt = toDeviceLocalIsoString(alert.createdAt);
+                  return (
+                    <AlertRow
+                      key={alert.id}
+                      dotColor={typeMeta.dotColor}
+                      title={typeMeta.badgeLabel}
+                      message={typeMeta.message}
+                      meta={`${dayLabel(localCreatedAt)}, ${formatTime(localCreatedAt)}`}
+                    />
+                  );
+                })
+              ) : (
+                <Text className="text-xs text-text-muted">No alerts yet</Text>
+              )}
 
               <View className="mt-3 rounded-2xl bg-card p-4">
                 <View className="flex-row items-center justify-between">
                   <Text className="text-sm font-semibold text-text-dark">Notes</Text>
-                  <Pressable onPress={() => router.push('/(doctor)/edit-note')}>
+                  <Pressable onPress={() => router.push({ pathname: '/(doctor)/edit-note', params: { id: patient.id } })}>
                     <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
                   </Pressable>
                 </View>
-                <Text className="mt-2 text-sm text-text-muted">{note?.content}</Text>
+                <Text className="mt-2 text-sm text-text-muted">{note?.content ?? 'No notes yet.'}</Text>
                 {note ? (
-                  <Text className="mt-3 text-[11px] text-text-muted">Last updated: {formatTimestamp(note.updatedAt)}</Text>
+                  <Text className="mt-3 text-[11px] text-text-muted">Last updated: {formatTimestamp(toDeviceLocalIsoString(note.updatedAt))}</Text>
                 ) : null}
               </View>
 
-              <Pressable
-                onPress={() => setArchiveModalOpen(true)}
-                className="mt-5 items-center rounded-2xl border-2 py-4"
-                style={{ borderColor: colors.riskHigh }}
-              >
-                <Text className="text-base font-semibold" style={{ color: colors.riskHigh }}>
-                  Archive Patient
-                </Text>
-              </Pressable>
+              {patient.archived ? (
+                <>
+                  <Pressable
+                    onPress={handleRestore}
+                    className="mt-5 flex-row items-center justify-center rounded-2xl border-2 py-4"
+                    style={{ borderColor: colors.secondary }}
+                  >
+                    <Ionicons name="arrow-undo-outline" size={18} color={colors.secondary} style={{ marginRight: 6 }} />
+                    <Text className="text-base font-semibold" style={{ color: colors.secondary }}>
+                      Restore Patient
+                    </Text>
+                  </Pressable>
+                  {archiveError ? (
+                    <Text className="mt-2 text-center text-sm" style={{ color: colors.riskHigh }}>
+                      {archiveError}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    setArchiveError(null);
+                    setArchiveModalOpen(true);
+                  }}
+                  className="mt-5 flex-row items-center justify-center rounded-2xl border-2 py-4"
+                  style={{ borderColor: colors.riskHigh }}
+                >
+                  <Ionicons name="archive" size={18} color={colors.riskHigh} style={{ marginRight: 6 }} />
+                  <Text className="text-base font-semibold" style={{ color: colors.riskHigh }}>
+                    Archive Patient
+                  </Text>
+                </Pressable>
+              )}
             </View>
           ) : (
             <View className="mt-16 items-center px-8">
@@ -224,12 +315,9 @@ export default function PatientDetail() {
       <ArchivePatientModal
         visible={archiveModalOpen}
         patientName={patient.name}
+        errorMessage={archiveError}
         onClose={() => setArchiveModalOpen(false)}
-        onConfirm={() => {
-          // No backend yet — archiving lands with the doctor caseload wiring (see docs/Development Plan.md Phase 3).
-          setArchiveModalOpen(false);
-          router.back();
-        }}
+        onConfirm={confirmArchive}
       />
     </SafeAreaView>
   );

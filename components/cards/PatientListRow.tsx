@@ -2,6 +2,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, riskBandColors } from '../../constants/theme';
 import { RiskRingBadge } from '../gauges/RiskRingBadge';
+import { MiniSparkline } from '../sparklines/MiniSparkline';
 
 export interface PatientRowData {
   /** Real UUID (profiles.id) — for navigation, not display. */
@@ -15,6 +16,9 @@ export interface PatientRowData {
   statusLabel: string; // "High Risk", "Medium Risk", "Low Risk", "Inactive (7+ days)", "Pending"
   lastCheckInDaysAgo?: number;
   notLoggedIn?: boolean;
+  archived?: boolean;
+  trendData?: number[]; // chronological, up to last 7 scores
+  trendDelta?: number; // last minus first in that window
   onPress?: () => void;
 }
 
@@ -27,8 +31,13 @@ export function PatientListRow({
   statusLabel,
   lastCheckInDaysAgo,
   notLoggedIn,
+  trendData,
+  trendDelta,
   onPress,
 }: PatientRowData) {
+  const hasTrend = trendData !== undefined && trendData.length >= 2;
+  const trendUp = (trendDelta ?? 0) >= 0;
+  const trendColor = trendUp ? colors.riskHigh : colors.riskLow;
   const initials = name
     .split(' ')
     .map((part) => part[0])
@@ -61,6 +70,18 @@ export function PatientListRow({
           <View className="flex-row items-center">
             <Ionicons name="time-outline" size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
             <Text className="text-xs text-text-muted">Not Logged In</Text>
+          </View>
+        ) : null}
+
+        {hasTrend ? (
+          <View className="mt-1 flex-row items-center">
+            <MiniSparkline data={trendData!} color={trendColor} width={50} height={20} />
+            <Ionicons
+              name={trendUp ? 'trending-up' : 'trending-down'}
+              size={12}
+              color={trendColor}
+              style={{ marginLeft: 4 }}
+            />
           </View>
         ) : null}
 

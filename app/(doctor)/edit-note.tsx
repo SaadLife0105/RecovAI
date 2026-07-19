@@ -1,23 +1,44 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
-import { useDoctorNote, updateDoctorNote } from '../../lib/hooks/useDoctorNote';
-import { formatTimestamp } from '../../lib/formatDate';
+import { useDoctorNote, saveDoctorNote } from '../../lib/hooks/useDoctorNote';
+import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 
-/** Screen 33 — Edit Doctor Note. Saves back into the mock note store so patient/[id].tsx reflects the edit on return. */
+/** Screen 33 — Edit Doctor Note. Persists to doctor_notes; patient/[id].tsx reflects the edit on return. */
 export default function EditNote() {
   const router = useRouter();
-  const { data: note } = useDoctorNote();
-  const [draft, setDraft] = useState(note?.content ?? '');
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { data: note, isLoading: isNoteLoading } = useDoctorNote(id);
+  const [draft, setDraft] = useState('');
+  const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSave = () => {
-    if (note) {
-      updateDoctorNote(note.patientId, draft, new Date().toISOString());
+  // useDoctorNote fetches async — its value is null while loading, so seeding
+  // `draft` from `note?.content` in useState's initializer would only ever
+  // capture that null first render, never the real content once it arrives.
+  // Hydrate draft exactly once, after the fetch resolves, so Save can never
+  // overwrite an existing note with a blank one.
+  useEffect(() => {
+    if (!isNoteLoading && !hasHydratedDraft) {
+      setDraft(note?.content ?? '');
+      setHasHydratedDraft(true);
+    }
+  }, [isNoteLoading, hasHydratedDraft, note]);
+
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    const { error } = await saveDoctorNote(id, draft);
+    if (error) {
+      setErrorMessage(error);
+      setIsSubmitting(false);
+      return;
     }
     router.back();
   };
@@ -37,6 +58,9 @@ export default function EditNote() {
             <TextInput
               value={draft}
               onChangeText={setDraft}
+              editable={hasHydratedDraft}
+              placeholder={hasHydratedDraft ? undefined : 'Loading note...'}
+              placeholderTextColor={colors.textMuted}
               multiline
               textAlignVertical="top"
               className="flex-1 text-sm text-text-dark"
@@ -44,7 +68,13 @@ export default function EditNote() {
           </View>
 
           {note ? (
-            <Text className="mt-2 text-xs text-text-muted">Last updated: {formatTimestamp(note.updatedAt)}</Text>
+            <Text className="mt-2 text-xs text-text-muted">Last updated: {formatTimestamp(toDeviceLocalIsoString(note.updatedAt))}</Text>
+          ) : null}
+
+          {errorMessage ? (
+            <Text className="mt-2 text-center text-sm" style={{ color: colors.riskHigh }}>
+              {errorMessage}
+            </Text>
           ) : null}
 
           <View className="mb-6 mt-4 flex-row gap-3">
@@ -55,8 +85,13 @@ export default function EditNote() {
             >
               <Text className="text-base font-semibold text-text-dark">Cancel</Text>
             </Pressable>
-            <Pressable onPress={handleSave} className="flex-1 items-center rounded-2xl py-4" style={{ backgroundColor: colors.primary }}>
-              <Text className="text-base font-semibold text-white">Save Note</Text>
+            <Pressable
+              onPress={handleSave}
+              disabled={isSubmitting || !hasHydratedDraft}
+              className="flex-1 items-center rounded-2xl py-4"
+              style={{ backgroundColor: colors.primary, opacity: isSubmitting || !hasHydratedDraft ? 0.6 : 1 }}
+            >
+              <Text className="text-base font-semibold text-white">{isSubmitting ? 'Saving...' : 'Save Note'}</Text>
             </Pressable>
           </View>
         </View>

@@ -13,6 +13,11 @@
     },
     "android": {
       "package": "com.saadlife.recovai",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAmrDcG7b-9WPoHYRuf4pzViVGY1cVvN7E"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

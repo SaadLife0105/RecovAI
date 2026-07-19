@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,17 @@ import { computeRiskScore } from '../../lib/riskEngine';
 import { computeNextStreak, StreakState } from '../../lib/streakLogic';
 import { DrugClass } from '../../lib/types';
 import { usePassiveData } from '../../lib/context/PassiveDataContext';
+
+// 4-level zone display (riskLow→moodOkay→riskMedium→riskHigh gradient).
+const ZONE_STATUS_DISPLAY: Record<
+  'safe' | 'low_risk' | 'medium_risk' | 'high_risk',
+  { label: string; color: string }
+> = {
+  safe: { label: 'Safe Zone', color: colors.riskLowText },
+  low_risk: { label: 'Low-Risk Area', color: colors.moodOkayText },
+  medium_risk: { label: 'Medium-Risk Area', color: colors.riskMediumText },
+  high_risk: { label: 'High-Risk Zone', color: colors.riskHigh },
+};
 
 /** Screen 6 — Daily Check-In. No live risk preview: score is computed on submit only. */
 export default function CheckIn() {
@@ -60,9 +71,8 @@ export default function CheckIn() {
     setErrorMessage(null);
 
     const today = getMauritiusDateString();
-    const nearRiskZone = passive.currentZoneStatus === 'risk';
     const score = computeRiskScore(
-      { craving, mood, sleep, isolated: !!isolated, steps: passive.steps, nearRiskZone },
+      { craving, mood, sleep, isolated: !!isolated, steps: passive.steps, zoneDangerLevel: passive.currentZoneStatus },
       primaryDrugClass
     );
 
@@ -209,13 +219,15 @@ export default function CheckIn() {
                 value={
                   !passive.zoneAvailable
                     ? '—'
-                    : passive.currentZoneStatus === 'risk'
-                    ? 'Near Risk Zone'
-                    : passive.currentZoneStatus === 'safe'
-                    ? 'Safe Zone'
+                    : passive.currentZoneStatus
+                    ? ZONE_STATUS_DISPLAY[passive.currentZoneStatus].label
                     : 'No zone data'
                 }
-                valueColor={passive.currentZoneStatus === 'risk' ? colors.riskHigh : colors.riskLowText}
+                valueColor={
+                  passive.currentZoneStatus
+                    ? ZONE_STATUS_DISPLAY[passive.currentZoneStatus].color
+                    : colors.riskLowText
+                }
               />
             </View>
             {!passive.stepsAvailable && (
@@ -226,8 +238,25 @@ export default function CheckIn() {
             {!passive.zoneAvailable && (
               <Text className="mt-1 text-xs text-text-muted">
                 Location unavailable — {passive.zonePermissionDenied ? 'permission not granted' : 'no signal'}
+                {'\n'}
+                <Text className="text-xs font-medium text-text-muted underline" onPress={() => Linking.openSettings()}>
+                  Open App Settings
+                </Text>
+                {'\n'}
+                <Text
+                  className="text-xs font-medium text-text-muted underline"
+                  onPress={() => router.push('/(patient)/location-help')}
+                >
+                  Need more help?
+                </Text>
               </Text>
             )}
+            <Text
+              className="mt-2 text-xs text-text-muted underline"
+              onPress={() => router.push('/(patient)/location-help')}
+            >
+              Location tracking not working as expected?
+            </Text>
             {passive.stepsAvailable && passive.steps === 0 && !stepsTipDismissed && (
               <View className="mt-2 flex-row items-start justify-between">
                 <Text className="mr-2 flex-1 text-xs text-text-muted">

@@ -9,33 +9,10 @@ import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { useAlerts } from '../../lib/hooks/useAlerts';
 import { usePatients } from '../../lib/hooks/usePatients';
-import { formatDateLabel, formatTime } from '../../lib/formatDate';
-import { getMauritiusDateString, toMauritiusIsoString } from '../../lib/mauritiusTime';
+import { formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
+import { ALERT_TYPE_META, FALLBACK_ALERT_META, dayLabel } from '../../lib/alertMeta';
 
 const FILTERS = ['All', 'Unread', 'High Risk'] as const;
-
-const ALERT_TYPE_META: Record<string, { badgeLabel: string; message: string; dotColor: string }> = {
-  high_risk: { badgeLabel: 'High Risk', message: 'High risk score detected', dotColor: colors.riskHigh },
-  missed_checkin: { badgeLabel: 'Missed Check-in', message: 'No check-in recorded today', dotColor: colors.riskMedium },
-  zone_breach: { badgeLabel: 'Zone Breach', message: 'Entered a risk zone', dotColor: colors.riskMedium },
-  predicted_high_risk: { badgeLabel: 'Predicted High Risk', message: 'High risk predicted for next 24h', dotColor: colors.riskMedium },
-  relapse_logged: { badgeLabel: 'Relapse Logged', message: 'Patient logged a relapse', dotColor: colors.riskHigh },
-};
-const FALLBACK_ALERT_META = { badgeLabel: 'Alert', message: 'New alert', dotColor: colors.riskMedium };
-
-function yesterdayOf(dateStr: string): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function dayLabel(iso: string): string {
-  const today = getMauritiusDateString();
-  const date = iso.slice(0, 10);
-  if (date === today) return 'Today';
-  if (date === yesterdayOf(today)) return 'Yesterday';
-  return formatDateLabel(date);
-}
 
 /** Screen 13 — Doctor Alerts. Filter tabs filter useAlerts() data by read/urgency. */
 export default function DoctorAlerts() {
@@ -83,7 +60,7 @@ export default function DoctorAlerts() {
               {filteredAlerts.map((alert) => {
                 const typeMeta = ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META;
                 const patient = patientById.get(alert.patientId);
-                const mauritiusCreatedAt = toMauritiusIsoString(alert.createdAt);
+                const localCreatedAt = toDeviceLocalIsoString(alert.createdAt);
                 const name = patient?.name ?? alert.patientId.slice(0, 8);
                 const isHigh = typeMeta.badgeLabel === 'High Risk' || typeMeta.badgeLabel === 'Relapse Logged';
                 const badge = {
@@ -91,7 +68,7 @@ export default function DoctorAlerts() {
                   bg: isHigh ? colors.riskHighBg : colors.riskMediumBg,
                   text: isHigh ? colors.riskHighText : colors.riskMediumText,
                 };
-                const meta = `${dayLabel(mauritiusCreatedAt)}, ${formatTime(mauritiusCreatedAt)} • ${alert.read ? 'Read' : 'Unread'}`;
+                const meta = `${dayLabel(localCreatedAt)}, ${formatTime(localCreatedAt)} • ${alert.read ? 'Read' : 'Unread'}`;
                 return (
                   <AlertRow
                     key={alert.id}

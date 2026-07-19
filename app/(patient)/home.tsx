@@ -49,14 +49,19 @@ export default function PatientHome() {
   const latestCheckIn = checkIns[checkIns.length - 1];
   const name = profile?.fullName.split(' ')[0] ?? '';
 
-  // Zone chip: green (safe) / red (risk) / neutral when we genuinely don't
-  // know (not near any zone, or location unavailable) — never imply either.
+  // Zone chip: a 4-level danger gradient (Safe→Low→Medium→High =
+  // riskLow→moodOkay→riskMedium→riskHigh) plus a neutral "no data" state when
+  // we genuinely don't know (not near any zone, or location unavailable).
+  const ZONE_CHIP = {
+    safe: { bg: colors.riskLowBg, icon: 'shield-checkmark' as const, iconColor: colors.riskLow, titleColor: colors.riskLowText, title: 'Safe Zone', subtitle: 'You are in a safe area' },
+    low_risk: { bg: colors.moodOkayBg, icon: 'alert-circle-outline' as const, iconColor: colors.moodOkay, titleColor: colors.moodOkayText, title: 'Low-Risk Area', subtitle: 'You are near a low-risk area' },
+    medium_risk: { bg: colors.riskMediumBg, icon: 'warning-outline' as const, iconColor: colors.riskMedium, titleColor: colors.riskMediumText, title: 'Medium-Risk Area', subtitle: 'You are near a medium-risk area' },
+    high_risk: { bg: colors.riskHighBg, icon: 'warning' as const, iconColor: colors.riskHigh, titleColor: colors.riskHighText, title: 'High-Risk Zone', subtitle: 'You are near a flagged area' },
+  };
   const zone =
-    currentZoneStatus === 'safe'
-      ? { bg: colors.safeZoneBg, icon: 'shield-checkmark' as const, iconColor: colors.riskLow, titleColor: colors.riskLowText, title: 'Safe Zone', subtitle: 'You are in a safe area' }
-      : currentZoneStatus === 'risk'
-      ? { bg: colors.nearRiskBg, icon: 'warning' as const, iconColor: colors.riskHigh, titleColor: colors.riskHigh, title: 'Near Risk Zone', subtitle: 'You are near a flagged area' }
-      : { bg: colors.card, icon: 'help-circle-outline' as const, iconColor: colors.textMuted, titleColor: colors.textDark, title: 'No Zone Data', subtitle: 'Location not available' };
+    currentZoneStatus === null
+      ? { bg: colors.card, icon: 'help-circle-outline' as const, iconColor: colors.textMuted, titleColor: colors.textDark, title: 'No Zone Data', subtitle: 'Location not available' }
+      : ZONE_CHIP[currentZoneStatus];
 
   if (hasCheckedInToday && latestCheckIn && !DEV_FORCE_EMPTY) {
     return (

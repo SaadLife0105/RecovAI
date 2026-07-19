@@ -76,8 +76,8 @@ export interface RiskZone {
   lat: number;
   lng: number;
   radiusM: number;
-  zoneType: string;
-  classification: 'safe' | 'risk';
+  zoneType: string | null;
+  classification: 'safe' | 'low_risk' | 'medium_risk' | 'high_risk';
   label: string;
 }
 

@@ -86,11 +86,11 @@ const MOCK_LNG = 57.5016;
 
 export const RISK_ZONES: RiskZone[] = [
   { id: 'zone-1', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 200, zoneType: 'home', classification: 'safe', label: 'Home' },
-  { id: 'zone-2', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 300, zoneType: 'bar_nightclub', classification: 'risk', label: 'Downtown Bar' },
-  { id: 'zone-3', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 250, zoneType: 'drug_market', classification: 'risk', label: 'Old Market' },
-  { id: 'zone-4', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 400, zoneType: 'friends_house', classification: 'risk', label: "John's House" },
+  { id: 'zone-2', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 300, zoneType: 'bar_nightclub', classification: 'high_risk', label: 'Downtown Bar' },
+  { id: 'zone-3', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 250, zoneType: 'drug_market', classification: 'high_risk', label: 'Old Market' },
+  { id: 'zone-4', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 400, zoneType: 'friends_house', classification: 'high_risk', label: "John's House" },
   { id: 'zone-5', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 500, zoneType: 'workplace', classification: 'safe', label: 'Office' },
-  { id: 'zone-6', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 150, zoneType: 'other', classification: 'risk', label: 'City Park' },
+  { id: 'zone-6', patientId: PATIENT_ID, doctorId: DOCTOR_ID, lat: MOCK_LAT, lng: MOCK_LNG, radiusM: 150, zoneType: 'other', classification: 'high_risk', label: 'City Park' },
 ];
 
 export const ALERTS: Alert[] = [

@@ -5,12 +5,13 @@ import { colors } from '../../constants/theme';
 interface ArchivePatientModalProps {
   visible: boolean;
   patientName: string;
+  errorMessage?: string | null;
   onConfirm: () => void;
   onClose: () => void;
 }
 
 /** Archive confirmation sheet — same modal pattern as CrisisResourcesModal. */
-export function ArchivePatientModal({ visible, patientName, onConfirm, onClose }: ArchivePatientModalProps) {
+export function ArchivePatientModal({ visible, patientName, errorMessage, onConfirm, onClose }: ArchivePatientModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 items-center justify-center bg-black/50 px-6" onPress={onClose}>
@@ -23,6 +24,12 @@ export function ArchivePatientModal({ visible, patientName, onConfirm, onClose }
           <Text className="mt-2 text-center text-sm text-text-muted">
             This patient will be moved to your archived list. You can restore them anytime.
           </Text>
+
+          {errorMessage ? (
+            <Text className="mt-3 text-center text-sm" style={{ color: colors.riskHigh }}>
+              {errorMessage}
+            </Text>
+          ) : null}
 
           <Pressable onPress={onConfirm} className="mt-5 w-full items-center rounded-2xl py-4" style={{ backgroundColor: colors.riskHigh }}>
             <Text className="text-base font-semibold text-white">Archive</Text>

@@ -15,8 +15,15 @@ export interface RiskInputs {
   sleep: number; // 1–10
   isolated: boolean;
   steps: number;
-  nearRiskZone: boolean;
+  zoneDangerLevel: 'safe' | 'low_risk' | 'medium_risk' | 'high_risk' | null; // null = not near any zone
 }
+
+const ZONE_DANGER_CONTRIBUTION: Record<'safe' | 'low_risk' | 'medium_risk' | 'high_risk', number> = {
+  safe: 0,
+  low_risk: 3,
+  medium_risk: 6,
+  high_risk: 10,
+};
 
 export interface RiskBreakdown {
   cravingContribution: number;
@@ -37,7 +44,7 @@ export function computeBreakdown(inputs: RiskInputs, primaryDrugClass: DrugClass
   const sleepContribution = (10 - inputs.sleep) * 0.15 * 10;
   const isolationContribution = inputs.isolated ? 15 : 0;
   const lowActivityContribution = inputs.steps < 2000 ? 10 : 0;
-  const zoneProximityContribution = inputs.nearRiskZone ? 10 : 0;
+  const zoneProximityContribution = inputs.zoneDangerLevel ? ZONE_DANGER_CONTRIBUTION[inputs.zoneDangerLevel] : 0;
 
   const base =
     cravingContribution +

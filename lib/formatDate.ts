@@ -48,6 +48,15 @@ export function toDeviceLocalIsoString(utcIso: string): string {
   return `${year}-${month}-${day}T${hour}:${minute}:00`;
 }
 
+/** "YYYY-MM-DD" for the device's own current local date — the display-only counterpart to mauritiusTime.ts's getMauritiusDateString, for relative-day labels ("Today"/"Yesterday") so they match what the viewer's own phone would call today, not a fixed Mauritius day boundary. */
+export function todayDeviceLocalDateString(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /** "May 12 – May 18, 2025" — start date without a year, end date with one. */
 export function formatDateRange(startIso: string, endIso: string): string {
   const start = parseIso(startIso);

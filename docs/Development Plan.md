@@ -39,7 +39,7 @@
 | `push_tokens` | user_id, expo_push_token, platform, updated_at | Needed for doctor alerts — Expo push requires storing each device's token server-side |
 | `checkins` | patient_id, date, mood (1–10), sleep (1–10), craving (1–10), isolated (bool), steps, risk_score, created_at | Unique (patient_id, date) |
 | `patient_substances` | patient_id, drug_class (enum), is_primary (bool), recovery_start_date | **New.** A patient can have multiple rows (polydrug use is common in Mauritius). Doctor sets these at account creation; patient can view but not edit. `is_primary` marks the class the risk engine keys off |
-| `risk_zones` | patient_id, doctor_id, lat, lng, radius_m, zone_type, classification (safe/risk), label | |
+| `risk_zones` | patient_id, doctor_id, lat, lng, radius_m (50–1000), zone_type (now optional), classification (safe / low_risk / medium_risk / high_risk — widened from the original binary safe/risk during Phase 3.4), label | |
 | `zone_breaches` | patient_id, zone_id, detected_at | Written by location task |
 | `alerts` | patient_id, doctor_id, type, urgency, xai_explanation, read, created_at | |
 | `journal_entries` | patient_id, content, mood_emoji, created_at | RLS: patient-only, doctor has NO policy |
@@ -84,9 +84,10 @@ The single most important vertical slice: **check-in → risk score → display*
 - [ ] `lib/riskEngine.ts` implementing the weighted formula:
   ```
   base  = craving×0.30×10 + (10−mood)×0.20×10 + (10−sleep)×0.15×10
-        + (isolated ? 15 : 0) + (steps<2000 ? 10 : 0) + (nearRiskZone ? 10 : 0)
+        + (isolated ? 15 : 0) + (steps<2000 ? 10 : 0) + zoneDangerContribution
   score = clamp( base × classSensitivity[primaryDrugClass], 0, 100 )
   ```
+  **Updated in Phase 3.4** (see the Dissertation Alignment Check at the bottom of this document): the original `(nearRiskZone ? 10 : 0)` flat boolean term was replaced with a graduated `zoneDangerContribution` lookup — `safe`/no zone = 0, `low_risk` = 3, `medium_risk` = 6, `high_risk` = 10 — once the zone classification itself was widened from binary safe/risk to a 4-level scale. The ceiling is unchanged (a patient near a high-risk zone still contributes exactly 10, preserving the original worst-case-scores-100 design), but zone severity now scales the contribution instead of an on/off switch.
 - [ ] **Drug-class sensitivity modifier** — a single small coefficient per class, NOT a separate algorithm. The same formula runs for everyone; the class scales how hard the score responds. Justified by the withdrawal/relapse-timeline literature (opioid relapse is fast and carries overdose-death risk — higher sensitivity; cannabis is milder — slightly lower). Suggested starting values (tune + document):
   ```
   heroin_opioids: 1.15   synthetic_cannabinoids: 1.10   stimulants: 1.05
@@ -148,21 +149,50 @@ The single most important vertical slice: **check-in → risk score → display*
 ## Phase 3 — Doctor Side (Weeks 4–5)
 
 ### 3.1 Forecasting engine
-- [ ] `lib/forecast.ts`: least-squares linear regression over last 7 daily risk scores → 3-day projection, clamped 0–100
-- [ ] Unit tests: known slope cases, flat series, <7 data points (fallback: no forecast shown)
+- [x] `lib/forecast.ts`: least-squares linear regression over last 7 daily risk scores → 3-day projection, clamped 0–100
+- [x] Unit tests: known slope cases, flat series, <7 data points (fallback: no forecast shown)
+
+**Verified** (checked against the actual files, not the Claude Code summary): `computeForecast` requires exactly 7 chronological scores (fewer OR more → null — the caller slices, not the function), projects day+1/+2/+3, clamps [0,100]. 9 new Jest tests, hand-verified the linear/flat/clamp cases. `forecastsHighRisk` flags any of the 3 projections ≥70.
 
 ### 3.2 Mission Control Dashboard (Screen 10)
-- [ ] Stat cards: Total Patients, High Risk Now, Predicted High Risk (48h) — the last one computed by running the forecaster over every patient
-- [ ] Patient cards sorted by current risk: avatar, name, risk badge, trend arrow, 7-day sparkline + 3-day dotted forecast (react-native-chart-kit)
-- [ ] Search bar + filter pills (All / High / Medium / Low / Inactive / Pending / Archived)
+- [x] Stat cards: Total Patients, High Risk Now, Predicted High Risk (48h) — the last one computed by running the forecaster over every patient
+- [x] Patient cards sorted by current risk: avatar, name, risk badge, trend arrow, 7-day sparkline (dotted 3-day forecast overlay deferred to Patient Detail's full chart — the dashboard row only shows a mini historical sparkline + trend arrow, not a forecast overlay per row; this is a reasonable scope narrowing, not a gap, since a dotted forecast at sparkline size (50×20px) wouldn't be legible)
+- [x] Search bar + filter pills (All / High / Medium / Low / Inactive / Pending / Archived) — all real filtering now, including a genuine three-tier sort (today's score desc → last-active-first → pending alphabetical) and archived patients correctly separated rather than dropped
+
+**Verified**: `usePatients()` now derives real `trendData`/`trendDelta` (2-point minimum) and a real `predictedHighRisk` count (7+ check-ins required, forecast crosses High band, excludes patients already High today to avoid double-counting with `highRisk`). Dashboard search does case-insensitive substring match on name + patientId; filter pills source-swap to a separate `archivedPatients` array for the Archived pill rather than filtering a merged list.
 
 ### 3.3 Patient Detail (Screen 11)
-- [ ] Full 7-day chart + dotted forecast + danger threshold line at 70
-- [ ] AI Explanation card (populated by XAI function, Phase 4), recent alerts list, private doctor notes, archive/restore
+- [x] Full 7-day chart + dotted forecast + danger threshold line at 70 — built as a raw react-native-svg component (`RiskTrendChart.tsx`), not react-native-chart-kit, since chart-kit has no native dashed-line support (same reasoning already established for `MiniSparkline.tsx`)
+- [x] AI Explanation card, recent alerts list, private doctor notes, archive/restore
+- Scope note: only what this checklist actually lists was built. The Check-ins/Alerts/Zones/Reports tabs on this screen remain "Coming soon" — those aren't 3.3 items, they're later-phase work the UI mockup happened to scaffold early.
+- AI Explanation card now shows a real alert's `xai_explanation` when one exists, or an honest neutral "coming soon" placeholder otherwise — the previous hardcoded text (fabricated "late-night phone usage" analysis, describing data the app doesn't even track) was replaced rather than left in place, independent of Phase 4's XAI function landing later.
+- New migration `0006_profiles_doctor_update_patient_policy.sql`: there was no RLS policy letting a doctor update a patient's `profiles` row at all until now (only self-update existed) — required for archive/restore. **Deployed and tested from a real doctor session** (archive + restore both confirmed to persist). Deployment needed a bookkeeping repair first — `0005` was already applied on the remote (from earlier manual RLS testing in Milestone 2) but wasn't marked as such in Supabase's migration history, so `db push` tried to reapply it and collided; fixed with `supabase migration repair --status applied 0005` (repairs tracking only, doesn't re-run SQL) before pushing 0006 cleanly.
+
+**Bugs caught in device testing (not by Claude Code's own summary, not by static verification either — these only surfaced on-device):**
+1. `edit-note.tsx` seeded its draft text from `note?.content` inside `useState`'s initializer. Since the note loads asynchronously, that initializer only ever saw the pre-fetch `null` — the editor would open blank even when a note already existed, and Save would have silently overwritten real content. Fixed directly (hydrate-once `useEffect` gated on `isLoading`, input disabled with a loading placeholder until real content arrives). Same bug class as the Phase 2 default-parameter issues: async data arriving after initial state was already set.
+2. Trend delta displayed as raw floating-point noise (`20.349999999999998`) instead of a rounded number — screenshot evidence caught this, static code review would not have (nothing about the code itself looked wrong; the bug only appears with real subtraction of two real float scores). Fixed with `.toFixed(1)` + explicit sign in `patient/[id].tsx`.
+3. **Stale-after-navigation**: archiving/restoring a patient and navigating back to the dashboard did not refresh the list — confirmed by live device testing, required manually switching tabs to force a refetch. Root cause: expo-router keeps the previous screen mounted underneath the stack rather than remounting it, so a plain mount-only `useEffect` never re-fires on return. Same root cause would also have affected doctor notes (edit, save, return to Overview → stale content) and Patient Detail's alerts/archived-state generally. Fixed by adding `useFocusEffect` (re-exported from `expo-router`, not `@react-navigation/native` directly — that package isn't a top-level resolvable dependency in this project) to `usePatients`, `usePatientDetail`, `useDoctorNote`, and `usePatientAlertsForDoctor`, so all four refetch on focus, not just on mount. **Re-verified on device after the fix**: archive → dashboard updates automatically; restore → same; note edit → Overview shows new content immediately. All confirmed working, no tab-switch workaround needed anymore.
+
+**Verified end-to-end on a real device with real data**, not just code review: migration 0006 deployed and tested from a live doctor session; a patient topped up to 9 real check-ins showed the forecast rendering correctly (dashed orange projection continuing the trend, crossing the red danger-threshold line as expected given the upward trend); archive and restore both confirmed to persist and to reflect on the dashboard without manual refresh; doctor notes confirmed to save, persist, and reflect immediately on return.
+
+**3.3 is done.**
 
 ### 3.4 Risk Zones (Screen 12)
-- [ ] Map interface (`react-native-maps` via Expo): doctor drops pins per patient, sets radius, zone type (Bar/Nightclub, Drug Market, Friend's House, Workplace, Home, Other) and Safe/Risk classification
-- [ ] Zone list view matching the mockup with radius + classification chips
+- [x] Map interface (`react-native-maps` via Expo): doctor taps/drags a pin per patient, sets radius via slider, an optional zone type tag (Bar/Nightclub, Drug Market, Friend's House, Workplace, Home, Other), and a danger-level classification
+- [x] Zone list view with radius + classification chips
+
+**Design change from the original plan, made mid-implementation at Sa'ad's direction after live testing**: the original binary Safe/Risk classification was replaced with a 4-level scale (Safe / Low Risk / Medium Risk / High Risk), and the zone-type tag was downgraded from required to optional — the free-text label is now the primary identifier a doctor sets, zone type is a supplementary tag. This is a genuine improvement on the original design, not just a UI tweak: `riskEngine.ts`'s zone contribution was a flat +10 boolean bump for "near any risk zone" regardless of severity; it's now a graduated lookup (safe=0, low_risk=3, medium_risk=6, high_risk=10) that lets zone danger scale the risk contribution instead of a crude on/off switch — more realistic, and more defensible as a dissertation modelling choice. The 4-level colour gradient (Safe→Low→Medium→High = riskLow→moodOkay→riskMedium→riskHigh) deliberately reuses existing theme colours rather than inventing new ones, so it stays visually consistent with the risk-score bands used everywhere else in the app. Implemented via a Postgres enum widening (`alter type zone_classification rename value 'risk' to 'high_risk'` + two `add value` statements — additive, no data migration needed since existing rows keep their meaning) plus updates across the risk engine, `useZoneMonitor.ts` (foreground zone-proximity watcher, now priority-ordered so the most dangerous overlapping zone wins), `useActivityFeed.ts`, and every zone-status display on both the doctor and patient sides.
+
+**Bug found in verification, not in the original build**: `add-zone.tsx`'s save handler used `router.push('/(doctor)/zones', ...)` instead of `router.back()` on success. Since this screen is always reached from an existing Zones screen already on the navigation stack, `push` left a duplicate Zones entry behind it — pressing back (in-app or the phone's own OS back button, which follows the same stack) landed on the just-submitted Add Zone form instead of Patient Detail. Not a fundamental navigation-architecture problem — Android's back button and expo-router's back both correctly follow whatever the real push/back history is; this was one bad call site building bad history. Fixed by using `router.back()`, since Zones is guaranteed already on the stack in the only flow that reaches this screen.
+
+**Timezone convention bug, also found in verification**: the doctor-notes feature (3.3) displayed `note.updatedAt` by calling `formatTimestamp()` directly on the raw UTC value from the database, skipping the `toMauritiusIsoString()`/`toDeviceLocalIsoString()` conversion step every other timestamp in the app goes through first — `formatTimestamp` deliberately does no timezone math itself (it reads digits straight out of the string), so an unconverted UTC timestamp displayed as if it were already local, off by a fixed 4 hours. Prompted a broader fix, not just a patch: display timestamps across the app (alerts, notes) now consistently use `toDeviceLocalIsoString()` (matching what a patient's own `RecentCheckInCard` already did) rather than the Mauritius-fixed conversion, so what's shown always matches the viewer's own phone clock. `dayLabel()`'s "Today"/"Yesterday" relative-day logic was updated to match (device-local "today", via a new `todayDeviceLocalDateString()` helper) for the same reason. Business-logic day-boundaries (check-in uniqueness, streaks, missed-check-in detection, forecast windows) deliberately stay Mauritius-fixed — that's a correctness requirement (a patient's streak shouldn't break because their phone's timezone briefly drifts), not a display concern, and nothing about that logic changed.
+
+**A significant build/environment saga, worth recording accurately for the dissertation's methodology/evaluation honesty**: getting a working `react-native-maps` build onto a device took three separate root causes, found one at a time, each confirmed before moving to the next rather than guessed at:
+1. `package-lock.json` had silently desynced from `package.json` (missing `expo-modules-core` and the entire Jest dependency tree despite `npm install` reporting success) — root cause of every earlier "dependencies not matching" EAS build failure this project had hit. Fixed with a full clean reinstall; `npm ci` (the exact command EAS's cloud build runs) was used as the local pass/fail gate from then on, not `npm install`'s own summary, which proved unreliable at accurately reporting the tree's real state on this machine more than once during the same recovery.
+2. A genuine version conflict between `react-native-reanimated@4.5.2` (pulled in transitively via `expo-router` → `@expo/ui`, not used directly by this app at all) and `react-native-worklets` — npm's natural resolution kept two different worklets versions side by side to satisfy conflicting peer ranges, which built successfully but crashed at runtime with a native JSI assertion. Root-caused by reading reanimated's own `compatibility.json` and Gradle assertion scripts directly rather than guessing from the error text, and fixed with an npm `overrides` entry forcing a single resolved version.
+3. Even with (1) and (2) fixed, the app still crashed on every launch with the same native assertion. Diagnosed from an Android `adb bugreport` capture (ADB itself was uncooperative that night — USB debugging authorization issues — so a full on-device bug report was used instead of live `logcat`) cross-referenced against `react-native-worklets`' own troubleshooting docs: Expo disables Metro's `inlineRequires` by default, which breaks worklets' native initialization pipeline. Fixed with a `metro.config.js` change (`getTransformOptions` forcing `inlineRequires: true`) — a pure JS-bundling fix requiring no native rebuild, verified by reloading the existing dev-client build rather than spending another one.
+
+Total cost: three EAS builds (of a very limited nightly budget) before the app opened at all. Worth citing in the dissertation as a concrete example of a real obstacle in cross-platform native dependency management, and of triangulating root causes from primary evidence (Gradle assertion source, compatibility manifests, on-device crash captures) rather than trial-and-error rebuilding.
 
 ### 3.5 Patient account creation + Alerts screen (Screen 13) + Doctor Profile (Screen 15)
 - [ ] Doctor creates patient with a password (via Edge Function using the service role — the client must never hold admin keys) **and selects the patient's drug class(es) from the six-class dropdown, marking one as primary** (dropdown, never free text — keeps the data clean and analysable); patient logs in directly with these credentials (no forced password change), and can change their own password at any time from Settings; doctor keeps metric visibility and ownership of the clinical fields (drug class, recovery start date), never account/login management
@@ -383,7 +413,7 @@ The stack table (§3.8) needs updating:
 
 Worth recording what was checked and found *already correct*, so this doesn't need re-checking later:
 - **Relapse logging** (FR35, Table 3.7, Use Case 3.1.1.7, the streak/sobriety-independence discussion in §3.1) — the dissertation's description matches the actual implementation precisely, including the non-conflation rationale. No drift.
-- **Danger zone taxonomy** (Phase 3.4's six zone types) matches the actual `risk_zones.zone_type` database check constraint exactly (`bar_nightclub`, `drug_market`, `friends_house`, `workplace`, `home`, `other`).
+- **Danger zone taxonomy** (Phase 3.4's six zone types) matches the actual `risk_zones.zone_type` database check constraint exactly (`bar_nightclub`, `drug_market`, `friends_house`, `workplace`, `home`, `other`). **Superseded by the Phase 3 session pass below** — this bullet was written before Phase 3.4 was actually built; zone_type is now optional and the classification itself was widened from binary. Kept here for the record rather than deleted, since the six-type taxonomy itself is still accurate.
 - **NFR9** (zone-breach debounce) and **NFR8** (graceful degradation) — both genuinely implemented and tested this session (the debounce logic specifically survived a real bug hunt: an ordering flaw that let a single failed insert permanently "poison" the debounce state was found and fixed via live device testing, not code review — good Testing-chapter material in its own right).
 
 ### 5. Stale content inside Development Plan.md itself — now fixed
@@ -393,3 +423,59 @@ Per the request to check whether *earlier* implementations also drifted, not jus
 - **Critical Caution #3** (originally: background GPS explicitly scoped out as unnecessary) is now marked superseded — background GPS was built and proven working.
 - **Section 2.4's own checklist text** was corrected at the time this drift was found (same session) — the Pedometer line now correctly points to the Health Connect entry instead of describing the abandoned `watchStepCount` approach.
 - **The "Future Work" section's Health Connect entry** was removed entirely, since what it described as future work is now done — superseded by Phase 2.4's detailed "Background step counting — resolved via Health Connect" entry.
+
+---
+
+## Dissertation Alignment Check — Phase 3 Session (Zones, Timezone Convention, Build Infrastructure)
+
+*Cross-checked against the same three chapters after Phase 3.4 (Risk Zones) and the bug fixes that followed live device testing. This pass found one genuine formula/data-model change (not just wording drift), one mechanism refinement, and a build/tooling saga worth citing on its own merits.*
+
+### 1. Direct contradiction — the chapters describe a formula and use case that no longer match the code
+
+Three places in Chapter 3 describe the original binary safe/risk zone model, and one of them is the risk-score **formula itself**, not just descriptive prose:
+
+- The worked formula: `... + (near risk zone ? 10 : 0)`
+- **Table 3.16** ("Data Signals and Risk Contribution"): *"Location | Passive | GPS proximity to zone | +10 points if near a risk zone"*
+- **Table 3.4** (Use Case: Assign Danger Zone): *"The doctor pins a location on a map and classifies it as a risk or safe zone... Doctor pins a location and selects a type and safety classification"*
+
+All three are now factually incorrect, not just imprecisely worded. Following live testing feedback (a flat safe/risk toggle didn't distinguish a sketchy street corner from a known drug market, and treated zone type as mandatory when a doctor may not always know or care to categorise a location), the implementation changed to:
+- **Classification**: 4 levels (Safe / Low Risk / Medium Risk / High Risk) instead of binary, each contributing a different weight to the risk score (0 / 3 / 6 / 10) instead of a flat +10 for any "risk" zone.
+- **Zone type**: downgraded from a required field to an optional secondary tag — the free-text label is now the primary identifier a doctor sets.
+
+Unlike the NFR16 case in the earlier alignment check, this isn't a "which framing is more defensible" choice — the actual numeric formula changed, so the chapters need updating to match, not the reverse. Recommended edits:
+- Replace `(near risk zone ? 10 : 0)` with the graduated lookup in both the prose formula and Table 3.16, and note the ceiling is preserved (a high-risk zone still contributes exactly 10, so the documented "worst-case inputs score 100" property is unaffected).
+- Update Table 3.4's Normal Flow to "Doctor pins a location, sets a danger level, and optionally tags a zone type" and its Description to reference the 4-level scale.
+- This is a **strengthening** of the original design rationale in §2.4.6 ("proximity to a risk zone contributes to the score") — the graduated model is a more literal, more defensible implementation of exactly what that section already argues (severity should matter), so the surrounding literature-grounded argument in Chapter 2 needs no change, only the concrete numbers in Chapter 3.
+
+### 2. Clarification worth adding — timestamp display vs. day-boundary logic are two distinct layers
+
+**NFR10**: *"The system shall handle check-in timezones consistently using Mauritius local time (UTC+4)."* This NFR is not contradicted by anything this session — it specifically concerns check-in timezone *day-boundary* logic (uniqueness, streaks, missed-check-in detection), and that logic is unchanged and still genuinely Mauritius-fixed. What's worth adding is a clarifying sentence, since NFR10 as worded could be read by an examiner as implying *all* displayed timestamps use Mauritius time uniformly, which was never fully true (a patient's own check-in card already showed device-local time from an earlier session) and is now explicitly a deliberate two-layer convention:
+- **Day-boundary / business logic** (check-in uniqueness, streaks, missed-check-in cron, forecast windows) — Mauritius-fixed, per NFR10, unchanged.
+- **Display timestamps** (alert times, note "last updated," check-in card times) — the viewer's own device-local time, so what's shown always matches what the person's phone clock says. This was made consistent across the app this session after a bug was found: the doctor-notes feature (Phase 3.3) displayed a raw UTC timestamp with no conversion at all, off by exactly 4 hours, which is what prompted auditing every other display timestamp for the same class of mistake.
+
+Recommended: one additional sentence near NFR10 (or in §3.7.3/wherever check-in timing is discussed) making this two-layer split explicit, rather than any change to NFR10's actual requirement.
+
+### 3. Mechanism refinement — GPS accuracy tier, ties into the still-open NFR16 item
+
+The earlier alignment check's NFR16 discussion (foreground-only passive collection) remains open and unresolved — this session adds a concrete, citable detail to that same discussion rather than a new separate contradiction. Both zone-proximity watchers (`useZoneMonitor.ts`, foreground display; `lib/backgroundLocationTask.ts`, the actual `zone_breaches` writer) were switched from `Location.Accuracy.Balanced` to `Location.Accuracy.High` after introducing a 50m minimum zone radius (down from 100m). This was a deliberate, evidence-based decision, not a default: Android's own documentation states `Balanced` targets ~100m accuracy and typically uses WiFi/cell positioning rather than GPS at all, which would make a 50m zone smaller than the position noise itself. `High` targets ~10m and does use GPS. An accuracy-aware safeguard was also added to both watchers — a position reading whose own self-reported uncertainty exceeds the zone's radius is treated as inconclusive rather than used to confidently (and possibly wrongly) place the patient in or out of a zone.
+
+This is worth citing directly in the Design/Testing chapters as a concrete instance of a design parameter (zone radius) and a technical constraint (GPS accuracy tiers) being reasoned about together rather than chosen independently — a real methodology point, not just an implementation footnote. It also sharpens the already-open NFR16 discussion: whichever way that item is ultimately resolved in the chapters, the location mechanism should now be described as GPS-based (`High` accuracy) for zone monitoring specifically, not the coarser WiFi/cell-leaning `Balanced` tier the original prototype scope may have implied.
+
+### 4. Chapter 3 technology table (§3.8) — needs a small update
+
+The `Location | expo-location | Foreground GPS + zone proximity | ... foreground-only in the prototype` row's "foreground-only" qualifier was already flagged as outdated by the earlier alignment check (background location genuinely works); this session's accuracy-tier change is additional detail for whatever replacement wording is chosen, not a new open question.
+
+### 5. Confirmed consistent — no action needed
+
+- The six-type zone taxonomy (Bar/Nightclub, Drug Market, Friend's House, Workplace, Home, Other) is unchanged and still matches the DB check constraint exactly — only its *requiredness* changed, not the taxonomy itself.
+- The drug-class sensitivity modifier, its coefficients, and the overall "transparent weighted formula over a trained classifier" argument (§2.8, §3.7.1) are entirely unaffected by the zone-model change — the modifier applies to the same `base` score regardless of how that base's zone term is computed internally.
+
+### 6. Worth citing on its own merits — a real build/environment debugging episode
+
+Getting a working `react-native-maps` build onto a physical device for this phase took three separate, unrelated root causes, each confirmed with primary evidence before moving to the next rather than guessed at from a stack trace alone:
+1. A silently desynced `package-lock.json` (missing `expo-modules-core` and the Jest dependency tree despite `npm install` reporting success) — the actual root cause of every earlier "dependencies not matching" EAS build failure. Diagnosed by comparing `npm install`'s own summary against `npm ci` (the literal command EAS's cloud build runs) and against direct on-disk package.json inspection, rather than trusting either tool's reported success.
+2. A genuine version conflict between `react-native-reanimated` (pulled in transitively via `expo-router` → `@expo/ui`, not used directly by this app) and `react-native-worklets`, root-caused by reading reanimated's own `compatibility.json` and Gradle assertion scripts directly rather than inferring a fix from the error text (an initial fix attempt, based on a plausible but wrong reading of a peer-dependency warning, made the problem worse before the correct direction was found this way).
+3. A native runtime crash on every launch, diagnosed from an Android `adb bugreport` capture (live `logcat` was unavailable that session due to USB debugging authorization issues) cross-referenced against `react-native-worklets`'s own troubleshooting documentation, tracing to Expo's default-disabled Metro `inlineRequires` setting breaking worklets' native initialization — fixed with a `metro.config.js` change requiring no native rebuild at all.
+
+This is strong, concrete material for the dissertation's Testing/Evaluation chapter as an example of triangulating root causes from primary evidence (dependency manifests, Gradle assertion source, on-device crash captures, official troubleshooting docs) under a genuinely constrained build budget, rather than trial-and-error rebuilding — worth a paragraph in its own right, independent of any specific feature it happened to be blocking.
+

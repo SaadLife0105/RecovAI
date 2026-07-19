@@ -41,6 +41,11 @@ TaskManager.defineTask(BACKGROUND_ZONE_TASK, async ({ data, error }) => {
   const insideSet = new Set<string>(stored ? JSON.parse(stored) : []);
 
   for (const zone of zones) {
+    // Skip zones where the GPS reading's own uncertainty is looser than the
+    // zone's radius (see useZoneMonitor.ts for the full reasoning) — avoids
+    // recording a breach (or a missed one) based on a low-confidence fix.
+    if (latest.coords.accuracy !== null && latest.coords.accuracy > zone.radius_m) continue;
+
     const inside =
       haversineDistanceMeters(latest.coords.latitude, latest.coords.longitude, zone.lat, zone.lng) <= zone.radius_m;
     const wasInside = insideSet.has(zone.id);
@@ -81,7 +86,14 @@ export async function registerBackgroundLocationTaskAsync(): Promise<boolean> {
   }
 
   await Location.startLocationUpdatesAsync(BACKGROUND_ZONE_TASK, {
-    accuracy: Location.Accuracy.Balanced,
+    // High, not Balanced — see useZoneMonitor.ts's comment for why: Balanced's
+    // ~100m target is larger than the smallest zone radius this app allows
+    // (50m), which would make breach detection unreliable for small zones.
+    // This is a real, ongoing battery cost since this task runs in the
+    // background regardless of whether the app is open — accepted
+    // deliberately in exchange for breach records that are actually
+    // trustworthy at 50m, per Sa'ad's explicit call.
+    accuracy: Location.Accuracy.High,
     timeInterval: 60000,
     distanceInterval: 30,
     showsBackgroundLocationIndicator: false,
