@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "501609738366",
+    "project_id": "recovai-9d668",
+    "storage_bucket": "recovai-9d668.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:501609738366:android:4bafb60bd3f620c5d9a82f",
+        "android_client_info": {
+          "package_name": "com.saadlife.recovai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBk8NwU-JRyTJpTXTC5ncdNN1KRSd5t-rI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

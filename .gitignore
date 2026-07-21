@@ -34,6 +34,14 @@ yarn-error.*
 .env
 .env*.local
 !.env.example
+evaluation/.env
+
+# Firebase service account key (FCM V1 push notifications) — sensitive,
+# grants admin-level Firebase access. Uploaded directly to EAS via
+# `eas credentials`, never committed. google-services.json is NOT ignored —
+# that one only contains public-facing project identifiers and is safe to
+# commit (Firebase's own docs confirm this).
+*firebase-adminsdk*.json
 
 # typescript
 *.tsbuildinfo

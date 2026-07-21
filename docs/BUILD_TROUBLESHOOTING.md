@@ -164,3 +164,115 @@ Both watchers are currently set to `High` (~10m, actually uses GPS) with
 an accuracy-aware safeguard (skips the in/out check entirely if the
 device's own reported accuracy is looser than the zone's radius) — don't
 remove either half of that pairing independently.
+
+---
+
+## EAS CLI: `secret:create` is deprecated, and `env:create`/`build:list` may fail with a generic config error
+
+`eas secret:create` is deprecated in favour of `eas env:create` — different
+flags, an `--environment` flag is now required:
+```powershell
+eas env:create --name KEY_NAME --value the-value --type string --visibility sensitive --environment development --environment preview --environment production --scope project
+```
+
+Separately, several `eas` commands (`env:create`, `build:list`, others)
+can fail with a generic, unhelpful error:
+```
+node_modules\expo\bin\cli config --json exited with non-zero code: 1
+Error: <command> command failed.
+```
+This is a known, widely-reported eas-cli bug (expo/eas-cli #3139, #3026,
+#3246, #3102 on GitHub) — an internal preflight check re-invokes `expo
+config --json` in a subprocess context that behaves differently from
+running it directly, particularly on Windows. **Confirm it's this bug, not
+a real config problem**, by running `npx expo config --json` directly — if
+that succeeds cleanly, the config itself is fine and this is the CLI bug.
+Workaround: use the **expo.dev web dashboard** instead of the CLI for that
+operation (Project settings → Environment variables → Add variable, for
+`env:create`) — the dashboard doesn't go through the same broken local
+preflight.
+
+---
+
+## Android 15 edge-to-edge breaks `KeyboardAvoidingView` / `adjustResize` entirely
+
+If a screen's `KeyboardAvoidingView` appears to do nothing at all when the
+keyboard opens (not just imperfectly — genuinely zero effect), and the app
+targets SDK 35 (`app.config.js`'s `targetSdkVersion`), this is almost
+certainly the cause, not a bug in the screen's own layout code.
+
+**Why**: Android 15 enforces edge-to-edge display for apps targeting SDK
+35+. This silently breaks `android:windowSoftInputMode="adjustResize"` at
+the OS level — the window no longer resizes for the keyboard at all — and
+`KeyboardAvoidingView`'s automatic `behavior` prop depends on the same
+broken mechanism, so it does nothing either. This is a known, current
+React Native/Expo issue (see the react-native-community discussions-and-
+proposals repo, discussion #827), not specific to this app.
+
+**What does NOT reliably fix it, ruled out on-device, don't retry these
+first:**
+- `react-native-safe-area-context`'s `useSafeAreaInsets().bottom` — stays
+  constant at the system nav-bar inset regardless of keyboard state on
+  this device; does not track the keyboard at all.
+
+**What actually works, confirmed on-device (see `app/(patient)/chat.tsx`
+for the real implementation)**: the RN `Keyboard` module's
+`keyboardDidShow`/`keyboardDidHide` events fire reliably with a correct
+height even though the automatic resize doesn't apply itself. Track the
+height in state from those events and apply it manually as `marginBottom`
+on the input row, gated to Android only (`Platform.OS === 'android'`) —
+keep `KeyboardAvoidingView`'s normal `behavior='padding'` for iOS, which
+has no equivalent problem. Two further corrections needed once you do
+this:
+1. The raw keyboard height over-lifts by whatever's normally below the
+   input at rest (e.g. a bottom tab bar) — measure that element's real
+   height via `onLayout` and subtract it; don't hardcode a guessed pixel
+   value, it'll be wrong on other devices/font scales.
+2. There's still a small residual gap/overlap after that — add back the
+   system nav-bar inset (`useSafeAreaInsets().bottom`, its STATIC at-rest
+   value, not as a keyboard-tracking signal) to the lift calculation.
+
+Final working formula: `Math.max(0, keyboardHeight - tabBarHeight +
+insets.bottom)`.
+
+---
+
+## Horizontal `ScrollView` chips/pills rendering as grossly oversized capsules
+
+If a row of small pill-shaped buttons inside a horizontal `ScrollView`
+renders stretched to a huge, wrong height (far taller than the text
+inside them) instead of compact chips, this is a flexbox cross-axis
+default, not a styling mistake in the chip components themselves.
+
+**Why**: a horizontal `ScrollView` with no explicit height, sitting
+inside a flex-column parent chain, lets flexbox's default
+`alignItems: 'stretch'` behaviour stretch each child to fill whatever
+height the ScrollView ends up allocated — which can be very large if
+nothing else in the layout constrains it.
+
+**Fix**: wrap the `ScrollView` in a `View` with an explicit fixed height,
+and set `alignItems: 'center'` on the `ScrollView`'s `contentContainerStyle`:
+```jsx
+<View style={{ height: 44 }}>
+  <ScrollView horizontal contentContainerStyle={{ alignItems: 'center' }}>
+    {/* chips */}
+  </ScrollView>
+</View>
+```
+Applies to any fixed-height horizontal-scroll row of chips/pills, not
+just this specific screen.
+
+---
+
+## Google Cloud Translation API supports `mfe` (Mauritian Creole) despite not being in its own documentation
+
+As of 2026-07-20, `docs.cloud.google.com/translate/docs/languages` does
+NOT list Mauritian Creole (`mfe`) in either of its supported-language
+tables, despite listing Haitian Creole (`ht`) and Seychellois Creole
+(`crs`). A direct API call with `target: 'mfe'` succeeds anyway and
+returns real Mauritian Creole text — confirmed via a live `translateText`
+call. Google's *consumer* product (translate.google.com / the app) added
+Mauritian Creole in a June 2024 announcement; the developer API evidently
+supports it too, just undocumented. Don't trust the documented language
+list alone if a language you need is missing from it — test the actual
+API call before ruling it out.

@@ -17,6 +17,7 @@
     "expo-health-connect": "^0.1.1",
     "expo-linking": "~56.0.15",
     "expo-location": "~56.0.21",
+    "expo-notifications": "~56.0.21",
     "expo-router": "~56.2.15",
     "expo-status-bar": "~56.0.4",
     "expo-task-manager": "~56.0.22",

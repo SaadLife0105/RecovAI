@@ -128,6 +128,17 @@ export default function CheckIn() {
       return;
     }
 
+    // High score → fire the XAI/alert Edge Function. Awaited so we don't leave
+    // a dangling promise on an unmounting component, but its outcome must never
+    // block the check-in from completing (NFR8 graceful degradation).
+    if (score >= 70) {
+      try {
+        await supabase.functions.invoke('generate-xai', { body: {} });
+      } catch (e) {
+        console.warn('generate-xai failed (check-in still succeeded):', e);
+      }
+    }
+
     setIsSubmitting(false);
     router.replace('/checkin-success');
   };

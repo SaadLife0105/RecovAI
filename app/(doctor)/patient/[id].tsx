@@ -204,6 +204,9 @@ export default function PatientDetail() {
                         </Text>
                       </View>
                     </View>
+                    <Text className="mt-0.5 text-[10px]" style={{ color: colors.riskHighText, opacity: 0.75 }}>
+                      From alert on {dayLabel(toDeviceLocalIsoString(latestAlert.createdAt))}, {formatTime(toDeviceLocalIsoString(latestAlert.createdAt))} — may not reflect the patient's current status shown above
+                    </Text>
                     <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
                       {xai}
                     </Text>
