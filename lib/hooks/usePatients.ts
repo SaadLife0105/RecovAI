@@ -157,7 +157,9 @@ export function usePatients(doctorId?: string): { data: PatientsData; isLoading:
           };
         }
 
-        return { row, isHighNow, predictsHigh };
+        // Applied here rather than in all three branches above — it's the same
+        // value regardless of which shape the row took.
+        return { row: { ...row, flagged: p.flagged_for_urgent_review === true }, isHighNow, predictsHigh };
       };
 
       const active = profiles.filter((p) => !p.archived).map(buildRow);

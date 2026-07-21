@@ -8,6 +8,7 @@ export interface PatientDetailData {
   name: string;
   username: string | null;
   archived: boolean;
+  flagged: boolean; // profiles.flagged_for_urgent_review — agent raises, doctor clears
   latestScore: number | null;
   trendData: number[]; // chronological, up to last 7 check-ins
   trendDelta: number | null; // null if fewer than 2 check-ins exist — not enough data for a trend
@@ -15,7 +16,14 @@ export interface PatientDetailData {
 }
 
 /** Doctor's view of a single patient's detail screen. */
-export function usePatientDetail(patientId?: string): { data: PatientDetailData | null; isLoading: boolean; error: null } {
+export function usePatientDetail(patientId?: string): {
+  data: PatientDetailData | null;
+  isLoading: boolean;
+  error: null;
+  /** For mutations made from this screen that stay on it (clearing the urgent
+   * -review flag) — archive/restore navigate away, so they rely on focus. */
+  refetch: () => void;
+} {
   const [data, setData] = useState<PatientDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMountedRef = useRef(true);
@@ -65,6 +73,7 @@ export function usePatientDetail(patientId?: string): { data: PatientDetailData 
         name: profileRow.full_name,
         username: profileRow.username,
         archived: profileRow.archived,
+        flagged: profileRow.flagged_for_urgent_review === true,
         latestScore,
         trendData,
         trendDelta,
@@ -84,7 +93,7 @@ export function usePatientDetail(patientId?: string): { data: PatientDetailData 
     }, [fetchDetail])
   );
 
-  return { data, isLoading, error: null };
+  return { data, isLoading, error: null, refetch: fetchDetail };
 }
 
 /**
@@ -93,5 +102,18 @@ export function usePatientDetail(patientId?: string): { data: PatientDetailData 
  */
 export async function setPatientArchived(patientId: string, archived: boolean): Promise<{ error: string | null }> {
   const { error } = await supabase.from('profiles').update({ archived }).eq('id', patientId);
+  return { error: error ? error.message : null };
+}
+
+/**
+ * Clear the agent-raised urgent-review flag. Only the assigned doctor can do
+ * this — enforced by 0011's trigger, not just the app layer (a patient's own
+ * client is rejected at the DB).
+ */
+export async function clearUrgentReviewFlag(patientId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ flagged_for_urgent_review: false })
+    .eq('id', patientId);
   return { error: error ? error.message : null };
 }

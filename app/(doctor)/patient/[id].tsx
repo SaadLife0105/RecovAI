@@ -11,7 +11,7 @@ import { AlertRow } from '../../../components/cards/AlertRow';
 import { SOSButton } from '../../../components/sos/SOSButton';
 import { ArchivePatientModal } from '../../../components/modals/ArchivePatientModal';
 import { useDoctorNote } from '../../../lib/hooks/useDoctorNote';
-import { usePatientDetail, setPatientArchived } from '../../../lib/hooks/usePatientDetail';
+import { usePatientDetail, setPatientArchived, clearUrgentReviewFlag } from '../../../lib/hooks/usePatientDetail';
 import { usePatientAlertsForDoctor } from '../../../lib/hooks/usePatientAlertsForDoctor';
 import { ALERT_TYPE_META, FALLBACK_ALERT_META, dayLabel } from '../../../lib/alertMeta';
 import { formatTimestamp, formatTime, toDeviceLocalIsoString } from '../../../lib/formatDate';
@@ -33,7 +33,7 @@ export default function PatientDetail() {
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  const { data: patient } = usePatientDetail(id);
+  const { data: patient, refetch: refetchPatient } = usePatientDetail(id);
   const { data: note } = useDoctorNote(id);
   const { data: alerts } = usePatientAlertsForDoctor(id);
 
@@ -58,6 +58,18 @@ export default function PatientDetail() {
       return;
     }
     router.back();
+  };
+
+  // Stays on this screen, so it refetches inline rather than relying on the
+  // hook's focus refetch (which only covers navigating away and back).
+  const handleClearFlag = async () => {
+    const { error } = await clearUrgentReviewFlag(id);
+    if (error) {
+      setArchiveError(error);
+      return;
+    }
+    setArchiveError(null);
+    refetchPatient();
   };
 
   if (!patient) {
@@ -97,6 +109,14 @@ export default function PatientDetail() {
                       {patient.archived ? 'Archived' : 'Active'}
                     </Text>
                   </View>
+                  {patient.flagged ? (
+                    <View className="ml-2 flex-row items-center rounded-full px-2 py-0.5" style={{ backgroundColor: colors.riskHighBg }}>
+                      <Ionicons name="flag" size={10} color={colors.riskHighText} style={{ marginRight: 3 }} />
+                      <Text className="text-[10px] font-semibold" style={{ color: colors.riskHighText }}>
+                        Flagged
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text className="text-xs text-text-muted">ID: {patient.username ?? patient.id.slice(0, 8)}</Text>
               </View>
@@ -266,6 +286,19 @@ export default function PatientDetail() {
                   <Text className="mt-3 text-[11px] text-text-muted">Last updated: {formatTimestamp(toDeviceLocalIsoString(note.updatedAt))}</Text>
                 ) : null}
               </View>
+
+              {patient.flagged ? (
+                <Pressable
+                  onPress={handleClearFlag}
+                  className="mt-5 flex-row items-center justify-center rounded-2xl border-2 py-4"
+                  style={{ borderColor: colors.riskHigh }}
+                >
+                  <Ionicons name="flag-outline" size={18} color={colors.riskHigh} style={{ marginRight: 6 }} />
+                  <Text className="text-base font-semibold" style={{ color: colors.riskHigh }}>
+                    Clear Urgent Review Flag
+                  </Text>
+                </Pressable>
+              ) : null}
 
               {patient.archived ? (
                 <>

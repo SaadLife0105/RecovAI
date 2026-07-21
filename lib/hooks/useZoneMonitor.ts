@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { haversineDistanceMeters } from '../geo';
 import { useRiskZones } from './useRiskZones';
@@ -32,14 +33,35 @@ export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
   const [permissionDenied, setPermissionDenied] = useState(false);
 
   // Zone IDs the patient is currently inside. In-memory only (not persisted) —
-  // a deliberate simplification for a foreground-only prototype watcher: the
-  // set naturally resets whenever monitoring restarts, which is acceptable
-  // because a fresh watch re-detects entries from the first position update.
+  // deliberately survives an active→background→active cycle (a ref on a
+  // component that never unmounts), so a brief phone-lock doesn't flicker the
+  // check-in screen's zone display to "—" and back. It resets only on a
+  // genuine unmount (e.g. logout) or when `zones`/`patientId` change, which
+  // triggers a fresh watch that re-detects entries from the first new fix.
   const insideRef = useRef<Set<string>>(new Set());
+
+  // "Foreground-only" was previously only true of the comment, not the code:
+  // React Native does NOT unmount components when the app is backgrounded, so
+  // the watcher stayed subscribed and the native side kept delivering position
+  // callbacks into a runtime that was no longer hosted — an on-device crash on
+  // 2026-07-21 ("IllegalArgumentException: The module wasn't created! You
+  // can't access the hosting runtime"). Tracking AppState makes the
+  // subscription's real lifecycle match what this hook already claimed.
+  const [appState, setAppState] = useState(AppState.currentState);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
     let subscription: Location.LocationSubscription | undefined;
+
+    // Not foregrounded: subscribe to nothing. The cleanup below has already
+    // run for the previous ('active') pass by the time this executes, so the
+    // old subscription is gone and no new one replaces it.
+    if (appState !== 'active') return;
 
     (async () => {
       const { granted } = await Location.requestForegroundPermissionsAsync();
@@ -98,6 +120,17 @@ export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
           if (isMounted) setCurrentZoneStatus(status);
         }
       );
+
+      // The cleanup below can fire while the two awaits above are still in
+      // flight (backgrounding mid-permission-prompt is the realistic case) —
+      // at that point `subscription` is still undefined, so cleanup has
+      // nothing to remove and this one would survive into the background
+      // unreferenced. That is exactly the dangling-callback shape that
+      // crashed the app, so tear it down here instead.
+      if (!isMounted) {
+        subscription.remove();
+        subscription = undefined;
+      }
     })();
 
     return () => {
@@ -105,8 +138,10 @@ export function useZoneMonitor(patientId?: string): ZoneMonitorResult {
       subscription?.remove();
     };
     // Re-subscribe when the zone set or patient changes so the watcher always
-    // compares against current zones.
-  }, [zones, patientId]);
+    // compares against current zones — and when the app foregrounds/
+    // backgrounds, which tears the watcher down and rebuilds it rather than
+    // leaving it running where it can't be serviced.
+  }, [zones, patientId, appState]);
 
   return { currentZoneStatus, isAvailable, permissionDenied };
 }

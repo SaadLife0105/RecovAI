@@ -59,6 +59,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { googleTranslate } from '../_shared/googleTranslate.ts';
 
 // Pinned Haiku version (Development Plan.md caution #11 — never a floating
 // alias). claude-haiku-4-5-20251001 is the current dated Haiku release.
@@ -125,41 +126,8 @@ function jsonResponse(body: unknown, status: number) {
   });
 }
 
-/** Google Cloud Translation API v2 (REST, single call). Omit `source` to let
- * Google auto-detect and return `detectedSourceLanguage` alongside the
- * translation — used for the inbound Kreol-detection call; the outbound
- * reply-translation call passes source='en' since it's already known. */
-async function googleTranslate(
-  text: string,
-  target: string,
-  source?: string
-): Promise<{ translatedText: string; detectedSourceLanguage?: string }> {
-  const apiKey = Deno.env.get('GOOGLE_TRANSLATE_API_KEY');
-  if (!apiKey) throw new Error('GOOGLE_TRANSLATE_API_KEY is not configured');
-
-  const res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ q: text, target, format: 'text', ...(source ? { source } : {}) }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Google Translate API error (${res.status}): ${await res.text()}`);
-  }
-
-  const translation = (await res.json())?.data?.translations?.[0];
-  if (!translation?.translatedText) {
-    throw new Error('Google Translate returned no translation');
-  }
-
-  // Defensive: format:'text' should prevent HTML in the response, but a
-  // stray tag (e.g. "<strong>") was observed leaking through on-device
-  // 2026-07-20 despite that setting. Strip anything tag-shaped before it can
-  // reach a plain-text chat bubble as literal markup.
-  const cleanedText = translation.translatedText.replace(/<\/?[a-z][^>]*>/gi, '');
-
-  return { translatedText: cleanedText, detectedSourceLanguage: translation.detectedSourceLanguage };
-}
+// googleTranslate now lives in _shared/googleTranslate.ts — risk-agent's
+// send_patient_message uses the same implementation (Phase 5).
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -461,13 +429,22 @@ ${conversationHistory}
     conversationUpdate.title = message.length > 60 ? `${message.slice(0, 60)}…` : message;
   }
 
-  const [{ error: insertError }, { error: conversationUpdateError }] = await Promise.all([
+  // Third write: store the language Claude just identified, so risk-agent's
+  // send_patient_message (which has no incoming text to detect from) has a
+  // signal to translate against (§5.0 point 3). Fire-and-forget — a failure
+  // here is logged like translationWarning and never affects the reply.
+  const [{ error: insertError }, { error: conversationUpdateError }, { error: languageError }] = await Promise.all([
     callerClient.from('chat_messages').insert([
       { patient_id: patientId, conversation_id: conversationId, role: 'user', content: message },
       { patient_id: patientId, conversation_id: conversationId, role: 'assistant', content: finalReply },
     ]),
     callerClient.from('chat_conversations').update(conversationUpdate).eq('id', conversationId),
+    callerClient.from('profiles').update({ preferred_language: patientLang }).eq('id', patientId),
   ]);
+
+  if (languageError) {
+    console.warn(`Failed to store preferred_language='${patientLang}': ${languageError.message}`);
+  }
 
   const persistenceError = insertError ?? conversationUpdateError;
   if (persistenceError) {

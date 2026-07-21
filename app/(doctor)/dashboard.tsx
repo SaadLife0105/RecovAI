@@ -10,7 +10,7 @@ import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { usePatients } from '../../lib/hooks/usePatients';
 
-const FILTERS = ['All', 'High Risk', 'Medium Risk', 'Low Risk', 'Inactive', 'Pending', 'Archived'];
+const FILTERS = ['All', 'High Risk', 'Medium Risk', 'Low Risk', 'Flagged', 'Inactive', 'Pending', 'Archived'];
 
 // DEV-ONLY: usePatients().isLoading is always false right now (no real
 // async fetch exists yet). Flip this to true locally to preview
@@ -34,6 +34,8 @@ export default function DoctorDashboard() {
         return p.score !== null && riskBand(p.score) === 'medium';
       case 'Low Risk':
         return p.score !== null && riskBand(p.score) === 'low';
+      case 'Flagged':
+        return p.flagged === true;
       case 'Inactive':
         return p.lastCheckInDaysAgo !== undefined && p.lastCheckInDaysAgo >= 7;
       case 'Pending':

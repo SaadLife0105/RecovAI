@@ -4,6 +4,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
+import { supabase } from '../../lib/supabase';
+import { useSession } from '../../lib/hooks/useSession';
 import { useChatMessages } from '../../lib/hooks/useChatMessages';
 import { useSendChatMessage } from '../../lib/hooks/useSendChatMessage';
 import { formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
@@ -18,10 +20,47 @@ const STARTER_SUGGESTIONS = ['Hi', "I'm having a craving", "I'm not feeling grea
 export default function Chat() {
   const router = useRouter();
   // Arriving from chat-history.tsx with a past conversation's id loads it
-  // immediately; arriving with none (e.g. the Chat tab) starts empty, same
-  // as "New Chat" below.
+  // immediately. Arriving with none (the Chat tab) resumes the patient's most
+  // recent conversation instead — see the one-shot effect below.
   const { conversationId: initialConversationId } = useLocalSearchParams<{ conversationId?: string }>();
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const { session, isLoading: sessionLoading } = useSession();
+  const patientId = session?.user.id;
+
+  // Opening the Chat tab used to land on a blank compose screen, which meant a
+  // proactive message the risk-agent had sent into "RecovAI Check-ins" was
+  // invisible unless the patient happened to open the history list and find it
+  // (confirmed on-device 2026-07-21). Resuming the most recent conversation —
+  // whichever it is, no special-casing by title — puts it in front of them.
+  //
+  // Deliberately ONE-SHOT and ref-guarded, not keyed off `conversationId`:
+  // handleNewChat() also sets conversationId back to undefined, and re-running
+  // this then would snap straight back to the old conversation and make that
+  // button do nothing.
+  const resumeAttempted = useRef(false);
+  const [resumeChecked, setResumeChecked] = useState(!!initialConversationId);
+
+  useEffect(() => {
+    if (resumeAttempted.current || initialConversationId || sessionLoading) return;
+    resumeAttempted.current = true;
+
+    if (!patientId) {
+      setResumeChecked(true); // no session to look anything up with
+      return;
+    }
+
+    supabase
+      .from('chat_conversations')
+      .select('id')
+      .eq('patient_id', patientId)
+      .order('last_message_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setConversationId(data.id);
+        setResumeChecked(true);
+      });
+  }, [patientId, sessionLoading, initialConversationId]);
 
   const { data: messages, refetch } = useChatMessages(conversationId);
   const { sendMessage, isSending, error: sendError } = useSendChatMessage();
@@ -38,6 +77,10 @@ export default function Chat() {
 
   const allMessages = [...messages, ...optimistic];
   const hasMessages = allMessages.length > 0;
+  // "Start a conversation" must only appear once we KNOW there's nothing to
+  // resume — otherwise it flashes for a moment and then snaps to a resumed
+  // conversation, which reads as broken. Blank is fine for that instant.
+  const showEmptyState = !hasMessages && resumeChecked && !conversationId;
 
   const scrollRef = useRef<ScrollView>(null);
   const scrollToEnd = () => scrollRef.current?.scrollToEnd({ animated: true });
@@ -246,6 +289,8 @@ export default function Chat() {
               </View>
             ) : null}
           </ScrollView>
+        ) : !showEmptyState ? (
+          <View className="flex-1" />
         ) : (
           <View className="flex-1 items-center justify-center px-8">
             <Image
@@ -260,7 +305,7 @@ export default function Chat() {
           </View>
         )}
 
-        {!hasMessages ? (
+        {showEmptyState ? (
           <View style={{ height: 44 }}>
             <ScrollView
               horizontal

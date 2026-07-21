@@ -10,5 +10,11 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts"
-  ]
+  ],
+  // scenario-testing/ is a standalone Node harness (Phase 5.3, Development
+  // Plan.md §5.3) that runs via tsx, never bundled into the app — excluded
+  // here for the same reason supabase/functions' Deno files already fall
+  // outside what this app-facing tsconfig can meaningfully check (no
+  // @types/node here, same as no Deno types there).
+  "exclude": ["scenario-testing", "supabase/functions"]
 }

@@ -17,6 +17,8 @@ export interface PatientRowData {
   lastCheckInDaysAgo?: number;
   notLoggedIn?: boolean;
   archived?: boolean;
+  /** profiles.flagged_for_urgent_review — raised by the agent, cleared only by the doctor. */
+  flagged?: boolean;
   trendData?: number[]; // chronological, up to last 7 scores
   trendDelta?: number; // last minus first in that window
   onPress?: () => void;
@@ -33,6 +35,7 @@ export function PatientListRow({
   notLoggedIn,
   trendData,
   trendDelta,
+  flagged,
   onPress,
 }: PatientRowData) {
   const hasTrend = trendData !== undefined && trendData.length >= 2;
@@ -86,6 +89,14 @@ export function PatientListRow({
         ) : null}
 
         <View className="mt-1 flex-row items-center">
+          {flagged ? (
+            <>
+              <Ionicons name="flag" size={11} color={colors.riskHigh} style={{ marginRight: 2 }} />
+              <Text className="mr-2 text-[10px] font-semibold" style={{ color: colors.riskHigh }}>
+                Flagged
+              </Text>
+            </>
+          ) : null}
           <View className="mr-1 h-2 w-2 rounded-full" style={{ backgroundColor: dotColor }} />
           <Text className="text-[10px] text-text-muted">{statusLabel}</Text>
         </View>

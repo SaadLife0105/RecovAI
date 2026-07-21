@@ -276,3 +276,58 @@ Mauritian Creole in a June 2024 announcement; the developer API evidently
 supports it too, just undocumented. Don't trust the documented language
 list alone if a language you need is missing from it — test the actual
 API call before ruling it out.
+
+---
+
+## Background location crash: `IllegalArgumentException: The module wasn't created! You can't access the hosting runtime` (2026-07-21)
+
+**Signature** (Android only): the app crashes with no user interaction at
+all — confirmed happening while the app was fully backgrounded, doing
+nothing. Full stack trace bottoms out in expo-location's continuous
+location-callback delivery path (`LocationModule.sendLocationResponse` →
+`KModuleEventEmitterWrapper.emitNative` → `Module.getRuntime`), trying to
+emit a location event into a JS module instance whose native "hosting
+runtime" no longer exists. Reopening the app afterward may not recover
+cleanly — on the dev-client specifically, it can bounce back to the Expo
+dev menu requiring the bundle server to be manually reselected; **this
+recovery-step detail is a dev-client artifact, not evidence the underlying
+crash itself is dev-client-specific** — don't conflate the two.
+
+**Root cause: a known, long-standing (multi-year, cross-SDK-version)
+upstream issue in Expo's native module bridge, not a defect in this app's
+code.** Confirmed via `expo/expo` GitHub issue #28728 ("App crashes when
+force stopped while background location task created using
+expo-task-manager and expo-location is active"), reporting the identical
+error class and an intermittent reproduction ("if it works fine on first
+try, repeat the steps and it should crash on second or third try") —
+related reports on this exact category (background location task +
+Android killing/reclaiming the app process → a race in the native bridge
+on relaunch) go back to at least 2019 across many Expo SDK versions, with
+no clear evidence of a definitive fix landing by SDK 56 (this project's
+version: `expo-location@~56.0.21`, `expo-task-manager@~56.0.22`, both
+current for the SDK). This crash happens inside Expo's own native module
+bootstrapping, before any of this app's JS ever runs — no amount of
+try/catch inside `lib/backgroundLocationTask.ts`'s task callback can catch
+it, since the callback never gets the chance to execute.
+
+**What was fixed, and what wasn't.** A real, separate bug was found and
+fixed in `lib/hooks/useZoneMonitor.ts` the same session: the *foreground*
+zone watcher claimed to be "foreground-only" in its own comments but had
+no code actually enforcing that against backgrounding specifically (only
+against a genuine unmount, which React Native doesn't do just because the
+app backgrounds) — fixed by gating the watcher's subscribe/cleanup cycle
+to `AppState`, so it's genuinely torn down the moment the app backgrounds.
+That fix is correct and worth keeping regardless, but it does NOT address
+this crash — the stack trace here is from the *background* task's own
+location delivery, a fundamentally different code path that's supposed to
+keep running while backgrounded (that's its entire purpose), and Expo's
+upstream bridge-reinitialisation bug applies to it independent of anything
+in this app's own JS.
+
+**Status, as of this session**: not reproduced again after 10 minutes
+fully closed (consistent with the upstream reports describing this as
+intermittent/probabilistic, not deterministic — not evidence it's fixed).
+**Action before the demo/Phase 7**: verify behaviour on a genuine
+standalone/production-profile build specifically (not just the dev-client) —
+see Known-Issues.md's Open entry. Do not assume a clean run during
+development testing means this won't recur.
