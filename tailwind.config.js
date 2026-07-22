@@ -6,14 +6,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#0D9488",
+        // Kept in sync with constants/theme.ts — see that file's header
+        // comment for why both must match, and its inline comments (2026-07-22)
+        // for why these three specific values were darkened for WCAG AA.
+        primary: "#0B7C72",
         background: "#F8FAFC",
         surface: "#F1F5F9",
         card: "#FDFDFD",
         divider: "#E2E8F0",
         "text-dark": "#1E293B",
-        "text-muted": "#64748B",
-        "risk-high": "#EF4444",
+        "text-muted": "#5C6B7F",
+        "risk-high": "#DC2626",
         "risk-high-bg": "#FEF2F2",
         "risk-high-text": "#B91C1C",
         "risk-medium": "#F59E0B",

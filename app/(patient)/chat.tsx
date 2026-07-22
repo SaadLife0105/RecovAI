@@ -208,10 +208,10 @@ export default function Chat() {
             </View>
           </View>
           <View className="flex-row items-center gap-4">
-            <Pressable onPress={handleNewChat} hitSlop={8}>
+            <Pressable onPress={handleNewChat} accessibilityLabel="Start a new chat" hitSlop={12}>
               <Ionicons name="create-outline" size={22} color={colors.textDark} />
             </Pressable>
-            <Pressable onPress={() => router.push('/(patient)/chat-history')} hitSlop={8}>
+            <Pressable onPress={() => router.push('/(patient)/chat-history')} accessibilityLabel="View chat history" hitSlop={12}>
               <Ionicons name="time-outline" size={22} color={colors.textDark} />
             </Pressable>
           </View>
@@ -354,6 +354,8 @@ export default function Chat() {
           <Pressable
             onPress={() => handleSend(draft)}
             disabled={isSending}
+            accessibilityLabel="Send message"
+            hitSlop={8}
             className="ml-2 h-9 w-9 items-center justify-center rounded-full"
             style={{ backgroundColor: colors.primary, opacity: isSending ? 0.5 : 1 }}
           >

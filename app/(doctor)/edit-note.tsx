@@ -48,7 +48,7 @@ export default function EditNote() {
       <View className="flex-1">
         <View className="flex-1 px-5 pt-2">
           <View className="mt-2 flex-row items-center">
-            <Pressable onPress={() => router.back()} className="mr-2 h-9 w-9 items-center justify-center">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mr-2 h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <Text className="text-xl font-bold text-text-dark">Edit Note</Text>

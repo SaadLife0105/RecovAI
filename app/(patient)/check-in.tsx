@@ -27,7 +27,9 @@ const ZONE_STATUS_DISPLAY: Record<
   safe: { label: 'Safe Zone', color: colors.riskLowText },
   low_risk: { label: 'Low-Risk Area', color: colors.moodOkayText },
   medium_risk: { label: 'Medium-Risk Area', color: colors.riskMediumText },
-  high_risk: { label: 'High-Risk Zone', color: colors.riskHigh },
+  // riskHighText, not riskHigh: the vivid band color is only 3.70:1 on a card,
+  // under AA for this small value text. The other three already use *Text.
+  high_risk: { label: 'High-Risk Zone', color: colors.riskHighText },
 };
 
 /** Screen 6 — Daily Check-In. No live risk preview: score is computed on submit only. */
@@ -212,7 +214,7 @@ export default function CheckIn() {
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-6" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center">
-            <Pressable onPress={() => router.back()} className="mr-2 h-9 w-9 items-center justify-center">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mr-2 h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <View>
@@ -288,7 +290,7 @@ export default function CheckIn() {
                     Need more help?
                   </Text>
                 </Text>
-                <Pressable onPress={() => setStepsTipDismissed(true)} hitSlop={8}>
+                <Pressable onPress={() => setStepsTipDismissed(true)} accessibilityLabel="Dismiss step-tracking tip" hitSlop={16}>
                   <Ionicons name="close" size={14} color={colors.textMuted} />
                 </Pressable>
               </View>

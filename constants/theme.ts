@@ -13,16 +13,29 @@
  */
 
 export const colors = {
-  primary: '#0D9488',
+  // Darkened 2026-07-22 from #0D9488 — the accessibility pass found
+  // white-on-primary (main CTAs) at 3.74:1 and primary-on-background/-card
+  // (accent text/icons) at 3.58/3.68:1, all under WCAG AA's 4.5:1. This one
+  // token fixes all three; also darkens the gauge's accent line and the
+  // active tab-bar state, which use the same token deliberately (design
+  // system rule at the top of this file: one source of truth per meaning).
+  primary: '#0B7C72',
   background: '#F8FAFC',
   surface: '#F1F5F9',
   card: '#FDFDFD',
   divider: '#E2E8F0',
 
   textDark: '#1E293B',
-  textMuted: '#64748B',
+  // Darkened 2026-07-22 from #64748B — textMuted on the surface color
+  // measured 4.34:1, just under AA. The smallest nudge that clears it;
+  // textMuted's other two pairings (background, card) already passed and
+  // move further into a comfortable margin as a side effect.
+  textMuted: '#5C6B7F',
 
-  riskHigh: '#EF4444',
+  // Darkened 2026-07-22 from #EF4444 — white-on-riskHigh (SOS button,
+  // destructive buttons) measured 3.76:1, under AA. Also darkens the gauge's
+  // High-risk band and riskHigh-colored text/icons directly on background/card.
+  riskHigh: '#DC2626',
   riskHighBg: '#FEF2F2',
   riskHighText: '#B91C1C',
 

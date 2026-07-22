@@ -6,6 +6,7 @@ import { colors, riskBand } from '../../constants/theme';
 import { StreakCard } from '../../components/cards/StreakCard';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
+import { useToast } from '../../components/toast/ToastProvider';
 import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
@@ -23,6 +24,14 @@ export default function PatientProfile() {
   const { data: profile } = usePatientProfile();
   const { data: streak } = useStreak();
   const { data: checkIns } = useCheckIns();
+  const { showToast } = useToast();
+
+  // signOut()'s result was discarded: if it failed, the row just did nothing
+  // and the patient was left staring at a button that appeared to be broken.
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) showToast("Couldn't sign out. Please try again.");
+  };
 
   if (!profile) return null;
 
@@ -69,7 +78,7 @@ export default function PatientProfile() {
                 <Text className="text-sm text-text-muted">{capitalize(profile.role)}</Text>
               </View>
             </View>
-            <Pressable onPress={() => router.push('/(patient)/edit-profile')}>
+            <Pressable onPress={() => router.push('/(patient)/edit-profile')} accessibilityLabel="Edit profile and settings" hitSlop={12}>
               <Ionicons name="settings-outline" size={22} color={colors.textDark} />
             </Pressable>
           </View>
@@ -99,7 +108,7 @@ export default function PatientProfile() {
             {settingsRows.map((row, i) => (
               <Pressable
                 key={row.label}
-                onPress={row.route ? () => router.push(row.route!) : row.danger ? () => supabase.auth.signOut() : undefined}
+                onPress={row.route ? () => router.push(row.route!) : row.danger ? handleSignOut : undefined}
                 className="flex-row items-center px-4 py-4"
                 style={i < settingsRows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.divider } : undefined}
               >

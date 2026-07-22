@@ -110,7 +110,7 @@ export default function AddPatient() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-          <Pressable onPress={() => router.back()} className="mb-2 mt-2 h-9 w-9 items-center justify-center">
+          <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mb-2 mt-2 h-9 w-9 items-center justify-center">
             <Ionicons name="chevron-back" size={24} color={colors.textDark} />
           </Pressable>
 
@@ -145,7 +145,11 @@ export default function AddPatient() {
               secureTextEntry={!showTempPassword}
               className="flex-1 py-3 text-text-dark"
             />
-            <Pressable onPress={() => setShowTempPassword((v) => !v)}>
+            <Pressable
+              onPress={() => setShowTempPassword((v) => !v)}
+              accessibilityLabel={showTempPassword ? 'Hide temporary password' : 'Show temporary password'}
+              hitSlop={12}
+            >
               <Ionicons name={showTempPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
             </Pressable>
           </View>
@@ -160,7 +164,11 @@ export default function AddPatient() {
               secureTextEntry={!showConfirmPassword}
               className="flex-1 py-3 text-text-dark"
             />
-            <Pressable onPress={() => setShowConfirmPassword((v) => !v)}>
+            <Pressable
+              onPress={() => setShowConfirmPassword((v) => !v)}
+              accessibilityLabel={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
+              hitSlop={12}
+            >
               <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
             </Pressable>
           </View>

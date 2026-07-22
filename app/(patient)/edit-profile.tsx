@@ -37,7 +37,7 @@ export default function EditProfile() {
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center justify-between">
-            <Pressable onPress={() => router.back()} className="h-9 w-9 items-center justify-center">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <Text className="text-lg font-bold text-text-dark">Edit Profile</Text>
@@ -56,6 +56,8 @@ export default function EditProfile() {
                 style={{ width: 100, height: 100, borderRadius: 50 }}
               />
               <Pressable
+                accessibilityLabel="Change profile photo"
+                hitSlop={8}
                 className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-background"
                 style={{ backgroundColor: colors.primary }}
               >

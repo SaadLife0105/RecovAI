@@ -146,6 +146,9 @@ Deno.serve(async (req: Request) => {
     username,
     assigned_doctor_id: doctorId,
     sobriety_start_date: startDate,
+    // The only place a profile is created with this false — the column
+    // defaults to true so existing accounts never see the walkthrough.
+    onboarding_completed: false,
   });
 
   if (profileError) {

@@ -40,8 +40,22 @@ export function RiskGauge({ score, size = 150, showCaption = true }: { score: nu
 
   return (
     <View style={{ alignItems: 'center' }}>
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Svg width={size} height={size}>
+      {/* One accessible element for the whole gauge: without this a screen
+          reader traverses the decorative arcs and the score/label Texts as
+          three disconnected stops. The synthesized label below is the only
+          thing it should ever announce here. */}
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`Risk score ${score} out of 100, ${label}`}
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Svg
+          width={size}
+          height={size}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           {bands.map((b) => (
             <Circle
               key={b.color}

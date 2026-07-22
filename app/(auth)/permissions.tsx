@@ -22,7 +22,7 @@ export default function Permissions() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 px-5 pt-4">
-        <Pressable onPress={() => router.back()} className="mb-4 h-9 w-9 items-center justify-center">
+        <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mb-4 h-9 w-9 items-center justify-center">
           <Ionicons name="chevron-back" size={24} color={colors.textDark} />
         </Pressable>
 

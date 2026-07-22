@@ -20,7 +20,7 @@ export default function ChangePassword() {
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center">
-            <Pressable onPress={() => router.back()} className="mr-2 h-9 w-9 items-center justify-center">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mr-2 h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <Text className="text-xl font-bold text-text-dark">Change Password</Text>
@@ -36,7 +36,11 @@ export default function ChangePassword() {
               secureTextEntry={!showNewPassword}
               className="flex-1 py-3 text-text-dark"
             />
-            <Pressable onPress={() => setShowNewPassword((v) => !v)}>
+            <Pressable
+              onPress={() => setShowNewPassword((v) => !v)}
+              accessibilityLabel={showNewPassword ? 'Hide new password' : 'Show new password'}
+              hitSlop={12}
+            >
               <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
             </Pressable>
           </View>
@@ -51,7 +55,11 @@ export default function ChangePassword() {
               secureTextEntry={!showConfirmPassword}
               className="flex-1 py-3 text-text-dark"
             />
-            <Pressable onPress={() => setShowConfirmPassword((v) => !v)}>
+            <Pressable
+              onPress={() => setShowConfirmPassword((v) => !v)}
+              accessibilityLabel={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
+              hitSlop={12}
+            >
               <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
             </Pressable>
           </View>

@@ -49,7 +49,7 @@ export default function JournalNew() {
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 px-5 pt-4">
         <View className="flex-row items-center justify-between">
-          <Pressable onPress={() => router.back()} className="h-9 w-9 items-center justify-center">
+          <Pressable onPress={() => router.back()} accessibilityLabel="Close without saving" hitSlop={8} className="h-9 w-9 items-center justify-center">
             <Ionicons name="close" size={24} color={colors.textDark} />
           </Pressable>
           <Text className="text-lg font-bold text-text-dark">New Entry</Text>

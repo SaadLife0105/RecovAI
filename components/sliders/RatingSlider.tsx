@@ -43,6 +43,13 @@ const HIGH_TEXT: Record<'mood' | 'sleep' | 'craving', string> = {
   craving: 'Intense urge',
 };
 
+// Screen-reader hints, only used when the slider is actually interactive.
+const HINTS: Record<'mood' | 'sleep' | 'craving', string> = {
+  mood: 'Adjust to rate your current mood',
+  sleep: "Adjust to rate last night's sleep",
+  craving: 'Adjust to rate your current craving',
+};
+
 interface RatingSliderProps {
   type: 'mood' | 'sleep' | 'craving';
   value: number;
@@ -66,6 +73,16 @@ export function RatingSlider({ type, value, onValueChange, readOnly }: RatingSli
           value={value}
           onValueChange={onValueChange}
           disabled={readOnly}
+          // Read-only instances (recap views) say so in the label and drop the
+          // hint entirely, so a screen reader never implies they're adjustable.
+          accessibilityLabel={
+            readOnly
+              ? `${LABELS[type]} rating, ${value} out of 10, read-only`
+              : `${LABELS[type]} rating, 1 to 10`
+          }
+          accessibilityRole={readOnly ? 'text' : 'adjustable'}
+          accessibilityValue={readOnly ? undefined : { min: 1, max: 10, now: value }}
+          accessibilityHint={readOnly ? undefined : HINTS[type]}
           minimumTrackTintColor={colors.primary}
           maximumTrackTintColor={colors.divider}
           thumbTintColor={colors.primary}

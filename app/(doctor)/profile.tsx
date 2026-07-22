@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
+import { useToast } from '../../components/toast/ToastProvider';
 import { useDoctorProfile } from '../../lib/hooks/useDoctorProfile';
 import { usePatients } from '../../lib/hooks/usePatients';
 import { formatDateLabel } from '../../lib/formatDate';
@@ -22,6 +23,14 @@ export default function DoctorProfile() {
   const router = useRouter();
   const { data: profile } = useDoctorProfile();
   const { data: patients } = usePatients();
+  const { showToast } = useToast();
+
+  // Same silent gap as the patient profile: a failed signOut() left the row
+  // looking inert with nothing shown.
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) showToast("Couldn't sign out. Please try again.");
+  };
 
   if (!profile) return null;
 
@@ -62,7 +71,7 @@ export default function DoctorProfile() {
             {PREFERENCES_ROWS.map((row, i) => (
               <Pressable
                 key={row.label}
-                onPress={row.route ? () => router.push(row.route!) : row.danger ? () => supabase.auth.signOut() : undefined}
+                onPress={row.route ? () => router.push(row.route!) : row.danger ? handleSignOut : undefined}
                 className="flex-row items-center px-4 py-4"
                 style={i < PREFERENCES_ROWS.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.divider } : undefined}
               >

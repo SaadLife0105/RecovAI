@@ -108,13 +108,19 @@ export interface JournalEntry {
   createdAt: string;
 }
 
+/** Mirrors the weekly_reports table (0012_weekly_reports.sql) — written only
+ *  by the generate-weekly-reports Edge Function, read only by the doctor. */
 export interface WeeklyReport {
   id: string;
+  doctorId: string;
   patientId: string;
-  weekStart: string; // ISO date
-  weekEnd: string; // ISO date
-  avgRisk: RiskBand;
+  weekStart: string; // ISO date — Monday of the reported week (Mauritius time)
+  weekEnd: string; // ISO date — Sunday of the reported week
+  avgRiskScore: number; // 0–100, 2dp
+  band: RiskBand; // frozen at generation time, from avgRiskScore
   compliancePercent: number;
+  alertCount: number;
+  zoneBreachCount: number;
 }
 
 export interface ChatMessage {

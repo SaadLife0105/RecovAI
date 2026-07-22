@@ -5,6 +5,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useSession } from '../lib/hooks/useSession';
+import { ToastProvider } from '../components/toast/ToastProvider';
 
 export default function RootLayout() {
   const { session, role, isLoading } = useSession();
@@ -31,7 +32,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <ToastProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ToastProvider>
     </SafeAreaProvider>
   );
 }

@@ -136,6 +136,7 @@ export default function DoctorDashboard() {
 
         <Pressable
           onPress={() => router.push('/(doctor)/add-patient')}
+          accessibilityLabel="Add a new patient"
           className="absolute bottom-52 right-5 h-14 w-14 items-center justify-center rounded-full shadow-lg"
           style={{ backgroundColor: colors.primary }}
         >

@@ -1,0 +1,20 @@
+# RecovAI — per-function Supabase config.
+#
+# Every other Edge Function in this project (rag-chat, generate-xai,
+# risk-agent, create-patient, embed-kb) is called by a real logged-in user's
+# session and keeps the platform's default JWT check (verify_jwt = true,
+# Supabase's own default when a function has no entry here at all) — that
+# check is genuinely useful for them, since it rejects an unauthenticated
+# caller before the function's own code even runs.
+#
+# The two cron-invoked functions below are the exceptions: they're invoked by
+# a Supabase Cron job, not a logged-in user, so there is no user JWT to check.
+# Per Supabase's own documented pattern for cron/webhook-style callers, the
+# platform check is disabled for them and each relies entirely on its own
+# x-cron-secret header check instead — both against the same CRON_SECRET (see
+# each function's own file-header comment for the full reasoning).
+[functions.generate-weekly-reports]
+verify_jwt = false
+
+[functions.generate-missed-checkin-alerts]
+verify_jwt = false

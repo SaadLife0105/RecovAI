@@ -29,7 +29,7 @@ export function CrisisResourcesModal({ visible, onClose }: CrisisResourcesModalP
         <Pressable onPress={(e) => e.stopPropagation()} className="w-full rounded-3xl bg-card p-5">
           <View className="flex-row items-center justify-between">
             <Text className="text-xl font-bold text-text-dark">Crisis Resources</Text>
-            <Pressable onPress={onClose} className="h-8 w-8 items-center justify-center">
+            <Pressable onPress={onClose} accessibilityLabel="Close crisis resources" hitSlop={8} className="h-8 w-8 items-center justify-center">
               <Ionicons name="close" size={22} color={colors.textDark} />
             </Pressable>
           </View>

@@ -1,6 +1,8 @@
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/hooks/useSession';
 import { PassiveDataProvider } from '../../lib/context/PassiveDataContext';
 import { registerBackgroundLocationTaskAsync } from '../../lib/backgroundLocationTask';
@@ -10,6 +12,44 @@ export default function PatientLayout() {
   const { session } = useSession();
   const patientId = session?.user.id;
   const router = useRouter();
+
+  // --- First-login walkthrough gate ---
+  // The ONLY place that decides whether onboarding shows. onboarding.tsx just
+  // writes the flag and navigates; it never re-checks, so the two screens
+  // can't bounce off each other. The redirect also fires at most once per
+  // mount (the ref), so returning here from home mid-session is a no-op.
+  //
+  // `null` = not resolved yet. The Stack is held back until it resolves, so a
+  // new patient never sees a frame of the home screen before the walkthrough.
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+  const hasRedirectedToOnboarding = useRef(false);
+
+  useEffect(() => {
+    if (!patientId) return;
+
+    let isMounted = true;
+    supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', patientId)
+      .single()
+      .then(({ data }) => {
+        // On a failed read, treat them as onboarded — a transient network
+        // error shouldn't push an existing patient into the walkthrough.
+        if (isMounted) setNeedsOnboarding(data?.onboarding_completed === false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [patientId]);
+
+  useEffect(() => {
+    if (needsOnboarding && !hasRedirectedToOnboarding.current) {
+      hasRedirectedToOnboarding.current = true;
+      router.replace('/(patient)/onboarding');
+    }
+  }, [needsOnboarding, router]);
 
   useEffect(() => {
     if (patientId) {
@@ -80,7 +120,11 @@ export default function PatientLayout() {
 
   return (
     <PassiveDataProvider patientId={patientId}>
-      <Stack screenOptions={{ headerShown: false }} />
+      {needsOnboarding === null ? (
+        <View className="flex-1 bg-background" />
+      ) : (
+        <Stack screenOptions={{ headerShown: false }} />
+      )}
     </PassiveDataProvider>
   );
 }

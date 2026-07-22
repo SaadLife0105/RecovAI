@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/theme';
+import { colors, riskBandColors } from '../../../constants/theme';
 import { RiskGauge } from '../../../components/gauges/RiskGauge';
 import { MiniSparkline } from '../../../components/sparklines/MiniSparkline';
 import { RiskTrendChart } from '../../../components/charts/RiskTrendChart';
@@ -13,8 +13,13 @@ import { ArchivePatientModal } from '../../../components/modals/ArchivePatientMo
 import { useDoctorNote } from '../../../lib/hooks/useDoctorNote';
 import { usePatientDetail, setPatientArchived, clearUrgentReviewFlag } from '../../../lib/hooks/usePatientDetail';
 import { usePatientAlertsForDoctor } from '../../../lib/hooks/usePatientAlertsForDoctor';
+import { usePatientReportHistory } from '../../../lib/hooks/usePatientReportHistory';
+import { useReportWeekDetail, type ReportWeekDetail } from '../../../lib/hooks/useReportWeekDetail';
+import { WeeklyCheckinGrid } from '../../../components/reports/WeeklyCheckinGrid';
 import { ALERT_TYPE_META, FALLBACK_ALERT_META, dayLabel } from '../../../lib/alertMeta';
-import { formatTimestamp, formatTime, toDeviceLocalIsoString } from '../../../lib/formatDate';
+import { formatTimestamp, formatTime, formatDateRange, toDeviceLocalIsoString } from '../../../lib/formatDate';
+import { addDaysToDateString } from '../../../lib/mauritiusTime';
+import type { WeeklyReport } from '../../../lib/types';
 
 const TABS = ['Overview', 'Check-ins', 'Alerts', 'Zones', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
@@ -26,16 +31,96 @@ const TAB_ICONS: Record<Exclude<Tab, 'Overview'>, keyof typeof Ionicons.glyphMap
   Reports: 'document-text-outline',
 };
 
-/** Screen 16 — Patient Detail (Doctor). Only the Overview tab is built; the rest are placeholders. */
+const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Plain-text summary of one completed week, for the Share sheet.
+ *
+ * `detail` is the same itemised data the accordion shows (undefined if the
+ * card was never expanded before this share, since loadDetail is lazy) — when
+ * present, this becomes a genuinely detailed export (dated, typed alerts and
+ * breaches, plus the AI week summary if it's finished generating), not just
+ * the four bare counts the original version shipped with.
+ */
+function reportShareText(report: WeeklyReport, checkinDates: Set<string>, detail: ReportWeekDetail | undefined): string {
+  const days = [0, 1, 2, 3, 4, 5, 6]
+    .map((i) => addDaysToDateString(report.weekStart, i))
+    .filter((date) => checkinDates.has(date))
+    // UTC day index, never the device's local timezone (CLAUDE.md date convention).
+    .map((date) => SHORT_DAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()]);
+
+  const band = report.band.charAt(0).toUpperCase() + report.band.slice(1);
+  const lines = [
+    `Week: ${formatDateRange(report.weekStart, report.weekEnd)}`,
+    `Average risk: ${report.avgRiskScore} (${band})`,
+    `Check-in compliance: ${report.compliancePercent}%`,
+    days.length > 0 ? `Checked in: ${days.join(', ')}` : 'No check-ins this week',
+    '',
+  ];
+
+  if (detail?.aiSummary) {
+    lines.push('AI Summary:', detail.aiSummary, '');
+  }
+
+  lines.push(`Alerts (${report.alertCount}):`);
+  if (detail && detail.alerts.length > 0) {
+    for (const alert of detail.alerts) {
+      const local = toDeviceLocalIsoString(alert.createdAt);
+      lines.push(`  ${dayLabel(local)}, ${formatTime(local)} — ${(ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META).badgeLabel}`);
+    }
+  } else if (report.alertCount === 0) {
+    lines.push('  No alerts this week');
+  } else {
+    // Detail was never fetched (card wasn't expanded before this share) —
+    // fall back to the count rather than a misleadingly empty list.
+    lines.push(`  (open this week in the app for a dated, itemised list)`);
+  }
+
+  lines.push('', `Zone breaches (${report.zoneBreachCount}):`);
+  if (detail && detail.zoneBreaches.length > 0) {
+    for (const breach of detail.zoneBreaches) {
+      const local = toDeviceLocalIsoString(breach.detectedAt);
+      lines.push(`  ${dayLabel(local)}, ${formatTime(local)} — ${breach.label} (${breach.classification})`);
+    }
+  } else if (report.zoneBreachCount === 0) {
+    lines.push('  No zone breaches this week');
+  } else {
+    lines.push(`  (open this week in the app for a dated, itemised list)`);
+  }
+
+  return lines.join('\n');
+}
+
+/** Screen 16 — Patient Detail (Doctor). Overview and Reports tabs are built; Check-ins and Alerts are still placeholders. */
 export default function PatientDetail() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  // `tab` is optional — the Reports screen deep-links straight into the
+  // Reports tab so a doctor doesn't land on Overview and have to tap again.
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
+  const [activeTab, setActiveTab] = useState<Tab>(
+    TABS.includes(tab as Tab) ? (tab as Tab) : 'Overview'
+  );
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const { data: patient, refetch: refetchPatient } = usePatientDetail(id);
   const { data: note } = useDoctorNote(id);
   const { data: alerts } = usePatientAlertsForDoctor(id);
+  // Same id the other hooks use — patient may still be loading below, and
+  // hooks can't be called conditionally.
+  const { data: reports, checkinDates } = usePatientReportHistory(id);
+  // Accordion: one week open at a time. loadDetail caches per reportId, so
+  // reopening a week never refetches or re-invokes the summary function.
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const { getDetail, loadDetail } = useReportWeekDetail();
+
+  const toggleReport = (report: WeeklyReport) => {
+    if (expandedReportId === report.id) {
+      setExpandedReportId(null);
+      return;
+    }
+    setExpandedReportId(report.id);
+    loadDetail(report);
+  };
 
   const recentAlerts = alerts.slice(0, 3);
   const latestAlert = alerts[0];
@@ -88,7 +173,7 @@ export default function PatientDetail() {
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center justify-between">
             <View className="flex-row items-center">
-              <Pressable onPress={() => router.back()} className="mr-2 h-9 w-9 items-center justify-center">
+              <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mr-2 h-9 w-9 items-center justify-center">
                 <Ionicons name="chevron-back" size={24} color={colors.textDark} />
               </Pressable>
               <Image
@@ -277,7 +362,11 @@ export default function PatientDetail() {
               <View className="mt-3 rounded-2xl bg-card p-4">
                 <View className="flex-row items-center justify-between">
                   <Text className="text-sm font-semibold text-text-dark">Notes</Text>
-                  <Pressable onPress={() => router.push({ pathname: '/(doctor)/edit-note', params: { id: patient.id } })}>
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/(doctor)/edit-note', params: { id: patient.id } })}
+                    accessibilityLabel="Edit note"
+                    hitSlop={12}
+                  >
                     <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
                   </Pressable>
                 </View>
@@ -332,6 +421,141 @@ export default function PatientDetail() {
                     Archive Patient
                   </Text>
                 </Pressable>
+              )}
+            </View>
+          ) : activeTab === 'Reports' ? (
+            <View className="mt-5">
+              {reports.length === 0 ? (
+                <Text className="text-sm text-text-muted">No reports yet for this patient</Text>
+              ) : (
+                reports.map((report) => {
+                  const band = riskBandColors(report.avgRiskScore);
+                  const bandLabel = report.band.charAt(0).toUpperCase() + report.band.slice(1);
+                  const weekRange = formatDateRange(report.weekStart, report.weekEnd);
+                  const isExpanded = expandedReportId === report.id;
+                  const detail = getDetail(report.id);
+                  return (
+                    <View key={report.id} className="mb-3 rounded-2xl bg-card p-4">
+                      {/* Header stays the fast-scan summary and is always
+                          visible; tapping it toggles the detail below. */}
+                      <Pressable onPress={() => toggleReport(report)}>
+                      <View className="flex-row items-start justify-between">
+                        <View className="flex-row items-center">
+                          <Text className="text-sm font-semibold text-text-dark">{weekRange}</Text>
+                          <Ionicons
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={14}
+                            color={colors.textMuted}
+                            style={{ marginLeft: 6 }}
+                          />
+                        </View>
+                        <Pressable
+                          onPress={() => {
+                            // If this card was never expanded, kick off the
+                            // fetch now — this share won't have the itemised
+                            // detail (it's async), but the NEXT tap on this
+                            // week (share or expand) will.
+                            loadDetail(report);
+                            Share.share({
+                              message: reportShareText(report, checkinDates, detail),
+                              title: `${patient.name} — ${weekRange}`,
+                            });
+                          }}
+                          accessibilityLabel={`Share the weekly report for ${weekRange}`}
+                          hitSlop={8}
+                          className="h-9 w-9 items-center justify-center rounded-full bg-surface"
+                        >
+                          <Ionicons name="download-outline" size={16} color={colors.textDark} />
+                        </Pressable>
+                      </View>
+
+                      <View className="mt-3">
+                        <Text className="text-xs text-text-muted">Avg. Risk</Text>
+                        <View className="mt-1 flex-row items-center">
+                          <View className="self-start rounded-full px-2 py-0.5" style={{ backgroundColor: band.bg }}>
+                            <Text className="text-[11px] font-semibold" style={{ color: band.text }}>
+                              {bandLabel}
+                            </Text>
+                          </View>
+                          <Text className="ml-2 text-sm font-bold text-text-dark">{report.avgRiskScore}</Text>
+                        </View>
+                      </View>
+
+                      <View className="mt-3">
+                        <Text className="text-xs text-text-muted">Days checked in</Text>
+                        <View className="mt-1.5">
+                          {/* Finished week — no asOfDate, so every non-green day is a real miss. */}
+                          <WeeklyCheckinGrid weekStart={report.weekStart} checkedInDates={checkinDates} />
+                        </View>
+                        <Text className="mt-1.5 text-[10px] text-text-muted">{report.compliancePercent}% this week</Text>
+                      </View>
+
+                      <View className="mt-3 flex-row items-center">
+                        <Ionicons name="notifications-outline" size={13} color={colors.textMuted} />
+                        <Text className="ml-1 mr-4 text-xs text-text-muted">{report.alertCount} alerts</Text>
+                        <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                        <Text className="ml-1 text-xs text-text-muted">{report.zoneBreachCount} zone breaches</Text>
+                      </View>
+                      </Pressable>
+
+                      {isExpanded ? (
+                        <View className="mt-4 border-t pt-4" style={{ borderTopColor: colors.divider }}>
+                          <Text className="text-xs font-semibold text-text-dark">AI Summary</Text>
+                          {detail?.isSummaryLoading ? (
+                            <Text className="mt-1 text-xs text-text-muted">Generating summary…</Text>
+                          ) : detail?.summaryError ? (
+                            <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
+                              {detail.summaryError}
+                            </Text>
+                          ) : (
+                            <Text className="mt-1 text-xs leading-5 text-text-muted">{detail?.aiSummary}</Text>
+                          )}
+
+                          <Text className="mt-4 text-xs font-semibold text-text-dark">Alerts this week</Text>
+                          {detail?.isLoading ? (
+                            <Text className="mt-1 text-xs text-text-muted">Loading…</Text>
+                          ) : detail?.error ? (
+                            <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
+                              {detail.error}
+                            </Text>
+                          ) : detail && detail.alerts.length > 0 ? (
+                            detail.alerts.map((alert) => {
+                              const local = toDeviceLocalIsoString(alert.createdAt);
+                              return (
+                                <Text key={alert.id} className="mt-1 text-xs text-text-muted">
+                                  {dayLabel(local)}, {formatTime(local)} —{' '}
+                                  {(ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META).badgeLabel}
+                                </Text>
+                              );
+                            })
+                          ) : (
+                            <Text className="mt-1 text-xs text-text-muted">No alerts this week</Text>
+                          )}
+
+                          <Text className="mt-4 text-xs font-semibold text-text-dark">Zone breaches this week</Text>
+                          {detail?.isLoading ? (
+                            <Text className="mt-1 text-xs text-text-muted">Loading…</Text>
+                          ) : detail?.error ? (
+                            <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
+                              {detail.error}
+                            </Text>
+                          ) : detail && detail.zoneBreaches.length > 0 ? (
+                            detail.zoneBreaches.map((breach) => {
+                              const local = toDeviceLocalIsoString(breach.detectedAt);
+                              return (
+                                <Text key={breach.id} className="mt-1 text-xs text-text-muted">
+                                  {dayLabel(local)}, {formatTime(local)} — {breach.label} ({breach.classification})
+                                </Text>
+                              );
+                            })
+                          ) : (
+                            <Text className="mt-1 text-xs text-text-muted">No zone breaches this week</Text>
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })
               )}
             </View>
           ) : (

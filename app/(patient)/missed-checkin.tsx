@@ -14,7 +14,7 @@ export default function MissedCheckIn() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <View className="flex-1 px-6 pt-4">
-          <Pressable onPress={() => router.back()} className="h-9 w-9 items-center justify-center">
+          <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="h-9 w-9 items-center justify-center">
             <Ionicons name="chevron-back" size={24} color={colors.textDark} />
           </Pressable>
 

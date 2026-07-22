@@ -32,7 +32,12 @@ export default function Journal() {
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center justify-between">
             <Text className="text-2xl font-bold text-text-dark">My Journal</Text>
-            <Pressable onPress={() => router.push('/(patient)/journal-new')} className="h-9 w-9 items-center justify-center">
+            <Pressable
+              onPress={() => router.push('/(patient)/journal-new')}
+              accessibilityLabel="New journal entry"
+              hitSlop={8}
+              className="h-9 w-9 items-center justify-center"
+            >
               <Ionicons name="create-outline" size={22} color={colors.textDark} />
             </Pressable>
           </View>
@@ -117,6 +122,7 @@ export default function Journal() {
 
         <Pressable
           onPress={() => router.push('/(patient)/journal-new')}
+          accessibilityLabel="New journal entry"
           className="absolute bottom-8 right-5 h-14 w-14 items-center justify-center rounded-full shadow-lg"
           style={{ backgroundColor: colors.primary }}
         >

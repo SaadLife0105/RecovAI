@@ -19,7 +19,7 @@ export default function ChatHistory() {
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center">
-            <Pressable onPress={() => router.back()} hitSlop={8} className="mr-2">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={12} className="mr-2">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <Text className="text-2xl font-bold text-text-dark">Chat History</Text>

@@ -118,7 +118,7 @@ export default function AddZone() {
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center">
-            <Pressable onPress={() => router.back()} className="mr-2 h-9 w-9 items-center justify-center">
+            <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mr-2 h-9 w-9 items-center justify-center">
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <View>

@@ -44,7 +44,12 @@ export default function Login() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 px-5 pt-4">
-        <Pressable onPress={() => router.replace('/(auth)/role-select')} className="mb-4 h-9 w-9 items-center justify-center">
+        <Pressable
+          onPress={() => router.replace('/(auth)/role-select')}
+          accessibilityLabel="Go back to role selection"
+          hitSlop={8}
+          className="mb-4 h-9 w-9 items-center justify-center"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.textDark} />
         </Pressable>
 
@@ -105,7 +110,11 @@ export default function Login() {
             secureTextEntry={!showPassword}
             className="flex-1 py-3 text-text-dark"
           />
-          <Pressable onPress={() => setShowPassword((v) => !v)}>
+          <Pressable
+            onPress={() => setShowPassword((v) => !v)}
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            hitSlop={12}
+          >
             <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
           </Pressable>
         </View>

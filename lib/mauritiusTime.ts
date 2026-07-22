@@ -21,6 +21,23 @@ export function daysBetween(dateA: string, dateB: string): number {
   return Math.round((b - a) / 86400000);
 }
 
+/** Shifts a "YYYY-MM-DD" Mauritius date string by whole days, via UTC-midnight arithmetic (same reasoning as daysBetween — never local-timezone date math). */
+export function addDaysToDateString(dateString: string, days: number): string {
+  return new Date(Date.parse(`${dateString}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+/** "YYYY-MM-DD" of the Monday starting the Mauritius week the given instant falls in — the same week boundary generate-weekly-reports uses for week_start. */
+export function getMauritiusWeekStart(date: Date = new Date()): string {
+  const today = getMauritiusDateString(date);
+  const daysSinceMonday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return addDaysToDateString(today, -daysSinceMonday);
+}
+
+/** Single-letter weekday abbreviation (M T W T F S S) for a "YYYY-MM-DD" date, read off the UTC-midnight Date object so the device's timezone can never shift it a day. */
+export function dayAbbreviation(dateString: string): string {
+  return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][new Date(`${dateString}T00:00:00Z`).getUTCDay()];
+}
+
 /**
  * Converts a real UTC timestamp (e.g. Postgres's `created_at`) into a
  * string whose wall-clock digits are Mauritius local time — safe to feed

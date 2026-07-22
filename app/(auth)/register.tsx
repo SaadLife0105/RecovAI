@@ -71,7 +71,7 @@ export default function Register() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <View className="flex-1 px-5 pt-4">
-        <Pressable onPress={() => router.back()} className="mb-4 h-9 w-9 items-center justify-center">
+        <Pressable onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8} className="mb-4 h-9 w-9 items-center justify-center">
           <Ionicons name="chevron-back" size={24} color={colors.textDark} />
         </Pressable>
 
@@ -107,7 +107,11 @@ export default function Register() {
             secureTextEntry={!showPassword}
             className="flex-1 py-3 text-text-dark"
           />
-          <Pressable onPress={() => setShowPassword((v) => !v)}>
+          <Pressable
+            onPress={() => setShowPassword((v) => !v)}
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            hitSlop={12}
+          >
             <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -122,7 +126,11 @@ export default function Register() {
             secureTextEntry={!showConfirmPassword}
             className="flex-1 py-3 text-text-dark"
           />
-          <Pressable onPress={() => setShowConfirmPassword((v) => !v)}>
+          <Pressable
+            onPress={() => setShowConfirmPassword((v) => !v)}
+            accessibilityLabel={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
+            hitSlop={12}
+          >
             <Ionicons
               name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
               size={20}

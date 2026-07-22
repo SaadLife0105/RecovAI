@@ -13,7 +13,7 @@
  * once the calendar moves past May 2025.
  */
 
-import type { Alert, ChatMessage, CheckIn, DoctorNote, JournalEntry, PatientSubstance, Profile, RiskZone, WeeklyReport } from './types';
+import type { Alert, ChatMessage, CheckIn, DoctorNote, JournalEntry, PatientSubstance, Profile, RiskZone } from './types';
 import type { PatientRowData } from '../components/cards/PatientListRow';
 import { colors } from '../constants/theme';
 
@@ -110,12 +110,9 @@ export const PATIENT_NAMES: Record<string, string> = {
   'patient-4': 'Taylor Johnson',
 };
 
-export const REPORTS: WeeklyReport[] = [
-  { id: 'report-1', patientId: PATIENT_ID, weekStart: '2025-05-17', weekEnd: '2025-05-24', avgRisk: 'high', compliancePercent: 68 },
-  { id: 'report-2', patientId: PATIENT_ID, weekStart: '2025-05-10', weekEnd: '2025-05-17', avgRisk: 'medium', compliancePercent: 75 },
-  { id: 'report-3', patientId: PATIENT_ID, weekStart: '2025-05-03', weekEnd: '2025-05-10', avgRisk: 'low', compliancePercent: 82 },
-  { id: 'report-4', patientId: PATIENT_ID, weekStart: '2025-04-26', weekEnd: '2025-05-03', avgRisk: 'medium', compliancePercent: 70 },
-];
+// REPORTS removed in Phase 6 — weekly reports are real rows now
+// (weekly_reports table + useReports.ts), and its only consumer was the
+// mock useReports.
 
 export const JOURNAL_ENTRIES: JournalEntry[] = [
   { id: 'journal-1', patientId: PATIENT_ID, date: '2025-05-24', moodLevel: 'great', text: 'Today was a good day. I felt more motivated and stayed positive...', createdAt: '2025-05-24T20:45:00+04:00' },
