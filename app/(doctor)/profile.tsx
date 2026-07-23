@@ -3,7 +3,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { useToast } from '../../components/toast/ToastProvider';
 import { useDoctorProfile } from '../../lib/hooks/useDoctorProfile';
@@ -11,9 +10,9 @@ import { usePatients } from '../../lib/hooks/usePatients';
 import { formatDateLabel } from '../../lib/formatDate';
 import { supabase } from '../../lib/supabase';
 
-const PREFERENCES_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; route?: '/(doctor)/alert-preferences' | '/(doctor)/change-password'; danger?: boolean }[] = [
+const PREFERENCES_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; route?: '/(doctor)/alert-preferences' | '/(doctor)/change-password' | '/(doctor)/edit-profile'; danger?: boolean }[] = [
   { icon: 'notifications-outline', label: 'Alert Preferences', route: '/(doctor)/alert-preferences' },
-  { icon: 'moon-outline', label: 'Theme', value: 'Light' },
+  { icon: 'create-outline', label: 'Edit Profile', route: '/(doctor)/edit-profile' },
   { icon: 'lock-closed-outline', label: 'Change Password', route: '/(doctor)/change-password' },
   { icon: 'log-out-outline', label: 'Log Out', danger: true },
 ];
@@ -38,19 +37,16 @@ export default function DoctorProfile() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-          <View className="mt-2 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <Image
-                source={require('../../assets/illustrations/20-doctor-avatar.png')}
-                style={{ width: 56, height: 56, borderRadius: 28 }}
-              />
-              <View className="ml-3">
-                <Text className="text-lg font-bold text-text-dark">{profile.fullName}</Text>
-                <Text className="text-sm text-text-muted">{profile.specialty}</Text>
-                <Text className="text-xs text-text-muted">Joined {formatDateLabel(profile.joinedDate)}</Text>
-              </View>
+          <View className="mt-2 flex-row items-center">
+            <Image
+              source={require('../../assets/illustrations/20-doctor-avatar.png')}
+              style={{ width: 56, height: 56, borderRadius: 28 }}
+            />
+            <View className="ml-3">
+              <Text className="text-lg font-bold text-text-dark">{profile.fullName}</Text>
+              <Text className="text-sm text-text-muted">{profile.specialty}</Text>
+              <Text className="text-xs text-text-muted">Joined {formatDateLabel(profile.joinedDate)}</Text>
             </View>
-            <Ionicons name="settings-outline" size={22} color={colors.textDark} />
           </View>
 
           <View className="mt-4 flex-row gap-3">
@@ -88,8 +84,6 @@ export default function DoctorProfile() {
             ))}
           </View>
         </ScrollView>
-
-        <SOSButton />
 
         <DoctorTabBar active="profile" />
       </View>

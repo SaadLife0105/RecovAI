@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../constants/theme';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { DrugClass, DRUG_CLASS_LABELS } from '../../lib/types';
 import { formatDateLabel } from '../../lib/formatDate';
@@ -25,6 +24,8 @@ export default function AddPatient() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
+  const [patientEmail, setPatientEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
   const [tempPassword, setTempPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showTempPassword, setShowTempPassword] = useState(false);
@@ -55,6 +56,9 @@ export default function AddPatient() {
     if (!/^[a-z0-9_.]{3,32}$/.test(username.trim().toLowerCase())) {
       return 'Username must be 3-32 characters: letters, numbers, underscore, or dot';
     }
+    // Permissive shape check — the server re-validates and re-checks the match.
+    if (!/^\S+@\S+\.\S+$/.test(patientEmail.trim())) return 'Please enter a valid patient email';
+    if (patientEmail.trim() !== confirmEmail.trim()) return "Emails don't match";
     if (tempPassword.length < 8) return 'Password must be at least 8 characters';
     if (tempPassword !== confirmPassword) return "Passwords don't match";
     if (!startDate) return 'Please select a start date';
@@ -86,6 +90,8 @@ export default function AddPatient() {
       body: {
         fullName,
         username: username.trim().toLowerCase(),
+        patientEmail: patientEmail.trim(),
+        patientEmailConfirm: confirmEmail.trim(),
         password: tempPassword,
         startDate: toLocalDateString(startDate!),
         drugClasses: selectedClasses.map((c) => ({ drugClass: c, isPrimary: c === primaryClass })),
@@ -135,6 +141,30 @@ export default function AddPatient() {
             className="rounded-xl bg-card px-4 py-3 text-text-dark"
           />
 
+          <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Patient&apos;s Email</Text>
+          <TextInput
+            value={patientEmail}
+            onChangeText={setPatientEmail}
+            placeholder="Enter patient's email"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            className="rounded-xl bg-card px-4 py-3 text-text-dark"
+          />
+
+          <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Confirm Email</Text>
+          <TextInput
+            value={confirmEmail}
+            onChangeText={setConfirmEmail}
+            placeholder="Re-enter patient's email"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            className="rounded-xl bg-card px-4 py-3 text-text-dark"
+          />
+
           <Text className="mb-1 mt-5 text-sm font-medium text-text-dark">Temporary Password</Text>
           <View className="flex-row items-center rounded-xl bg-card px-4">
             <TextInput
@@ -143,6 +173,8 @@ export default function AddPatient() {
               placeholder="Enter temporary password"
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showTempPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
               className="flex-1 py-3 text-text-dark"
             />
             <Pressable
@@ -162,6 +194,8 @@ export default function AddPatient() {
               placeholder="Confirm temporary password"
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
               className="flex-1 py-3 text-text-dark"
             />
             <Pressable
@@ -256,8 +290,6 @@ export default function AddPatient() {
             </Text>
           </Pressable>
         </ScrollView>
-
-        <SOSButton />
 
         <DoctorTabBar active="dashboard" />
       </View>

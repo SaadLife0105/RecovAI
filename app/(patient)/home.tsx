@@ -68,12 +68,9 @@ export default function PatientHome() {
       <SafeAreaView className="flex-1 bg-background" edges={['top']}>
         <View className="flex-1">
           <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-            <View className="mt-2 flex-row items-center justify-between">
-              <View>
-                <Text className="text-sm text-text-muted">Good morning,</Text>
-                <Text className="text-xl font-bold text-text-dark">{name}</Text>
-              </View>
-              <Ionicons name="notifications-outline" size={24} color={colors.textDark} />
+            <View className="mt-2">
+              <Text className="text-sm text-text-muted">Good morning,</Text>
+              <Text className="text-xl font-bold text-text-dark">{name}</Text>
             </View>
 
             <View className="mt-4 items-center">
@@ -151,12 +148,9 @@ export default function PatientHome() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-          <View className="mt-2 flex-row items-center justify-between">
-            <View>
-              <Text className="text-sm text-text-muted">Good morning,</Text>
-              <Text className="text-xl font-bold text-text-dark">{name}</Text>
-            </View>
-            <Ionicons name="notifications-outline" size={24} color={colors.textDark} />
+          <View className="mt-2">
+            <Text className="text-sm text-text-muted">Good morning,</Text>
+            <Text className="text-xl font-bold text-text-dark">{name}</Text>
           </View>
 
           <View className="mt-4 flex-row gap-3">

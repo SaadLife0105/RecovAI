@@ -49,7 +49,7 @@ export default function MissedCheckIn() {
 
         <SOSButton />
 
-        <BottomTabBar active="checkin" />
+        <BottomTabBar />
       </View>
     </SafeAreaView>
   );

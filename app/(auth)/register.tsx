@@ -105,6 +105,8 @@ export default function Register() {
             placeholder="Enter password"
             placeholderTextColor={colors.textMuted}
             secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
             className="flex-1 py-3 text-text-dark"
           />
           <Pressable
@@ -124,6 +126,8 @@ export default function Register() {
             placeholder="Confirm password"
             placeholderTextColor={colors.textMuted}
             secureTextEntry={!showConfirmPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
             className="flex-1 py-3 text-text-dark"
           />
           <Pressable

@@ -27,7 +27,9 @@ export default function Permissions() {
         </Pressable>
 
         <Text className="text-2xl font-bold text-text-dark">We need a few permissions</Text>
-        <Text className="mt-1 text-sm text-text-muted">These help us provide better insights and support.</Text>
+        <Text className="mt-1 text-sm text-text-muted">
+          These help us provide better insights and support. We&apos;ll ask for each one as it&apos;s needed.
+        </Text>
 
         <View className="mt-6">
           {PERMISSIONS.map((p) => (
@@ -50,7 +52,7 @@ export default function Permissions() {
           className="mb-6 items-center rounded-2xl py-4"
           style={{ backgroundColor: colors.primary }}
         >
-          <Text className="text-base font-semibold text-white">Allow All</Text>
+          <Text className="text-base font-semibold text-white">Continue</Text>
         </Pressable>
       </View>
     </SafeAreaView>

@@ -96,6 +96,60 @@ export async function createRiskZone(input: {
   return { error: error ? error.message : null };
 }
 
+/**
+ * Update an existing zone. Same field set as createRiskZone minus patientId
+ * and doctor_id — neither is reassignable by an edit, and RLS's `using` clause
+ * already restricts the row to the zone's own doctor_id = auth.uid().
+ */
+export async function updateRiskZone(
+  zoneId: string,
+  input: {
+    lat: number;
+    lng: number;
+    radiusM: number;
+    zoneType: string | null;
+    classification: 'safe' | 'low_risk' | 'medium_risk' | 'high_risk';
+    label: string;
+  }
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('risk_zones')
+    .update({
+      lat: input.lat,
+      lng: input.lng,
+      radius_m: input.radiusM,
+      zone_type: input.zoneType,
+      classification: input.classification,
+      label: input.label,
+    })
+    .eq('id', zoneId);
+
+  return { error: error ? error.message : null };
+}
+
+/** Fetch one zone by id — used by add-zone.tsx to pre-fill its edit mode. */
+export async function fetchRiskZone(zoneId: string): Promise<{ data: RiskZone | null; error: string | null }> {
+  const { data: row, error } = await supabase.from('risk_zones').select('*').eq('id', zoneId).maybeSingle();
+
+  if (error) return { data: null, error: error.message };
+  if (!row) return { data: null, error: 'That zone no longer exists.' };
+
+  return {
+    data: {
+      id: row.id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id,
+      lat: row.lat,
+      lng: row.lng,
+      radiusM: row.radius_m,
+      zoneType: row.zone_type,
+      classification: row.classification,
+      label: row.label,
+    },
+    error: null,
+  };
+}
+
 /** Delete a zone by id. RLS restricts this to the zone's own doctor_id = auth.uid(). */
 export async function deleteRiskZone(zoneId: string): Promise<{ error: string | null }> {
   const { error } = await supabase.from('risk_zones').delete().eq('id', zoneId);

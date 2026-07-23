@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, riskBand, riskBandColors } from '../../constants/theme';
 import { EmptyStateCard } from '../../components/cards/EmptyStateCard';
 import { ReportListSkeleton } from '../../components/skeletons/ReportListSkeleton';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { WeeklyCheckinGrid } from '../../components/reports/WeeklyCheckinGrid';
 import { usePatients } from '../../lib/hooks/usePatients';
@@ -133,8 +132,6 @@ export default function DoctorReports() {
             </View>
           )}
         </ScrollView>
-
-        <SOSButton />
 
         <DoctorTabBar active="reports" />
       </View>

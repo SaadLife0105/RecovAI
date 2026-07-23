@@ -12,6 +12,7 @@ import { formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
 import { CrisisResourcesModal } from '../../components/modals/CrisisResourcesModal';
+import { getRandomSupportDisclaimer } from '../../lib/supportDisclaimers';
 import type { ChatMessage } from '../../lib/types';
 
 const STARTER_SUGGESTIONS = ['Hi', "I'm having a craving", "I'm not feeling great today", 'Just checking in'];
@@ -26,6 +27,7 @@ export default function Chat() {
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const { session, isLoading: sessionLoading } = useSession();
   const patientId = session?.user.id;
+  const [supportDisclaimer] = useState(getRandomSupportDisclaimer);
 
   // Opening the Chat tab used to land on a blank compose screen, which meant a
   // proactive message the risk-agent had sent into "RecovAI Check-ins" was
@@ -337,17 +339,20 @@ export default function Chat() {
           </View>
         ) : null}
 
+        <Text className="px-5 pt-2 text-xs" style={{ color: colors.textMuted }}>
+          {supportDisclaimer}
+        </Text>
+
         <View
           className="flex-row items-center border-t border-divider px-5 py-3"
           style={{ marginBottom: androidLift }}
         >
-          <Ionicons name="attach-outline" size={22} color={colors.textMuted} />
           <TextInput
             value={draft}
             onChangeText={setDraft}
             placeholder="Type a message..."
             placeholderTextColor={colors.textMuted}
-            className="ml-2 flex-1 rounded-full bg-card px-4 py-2.5 text-sm text-text-dark"
+            className="flex-1 rounded-full bg-card px-4 py-2.5 text-sm text-text-dark"
             onSubmitEditing={() => handleSend(draft)}
             editable={!isSending}
           />

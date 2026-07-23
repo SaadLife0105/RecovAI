@@ -34,9 +34,16 @@ interface CreatePatientBody {
   fullName: string;
   username: string;
   password: string;
+  patientEmail: string;
+  patientEmailConfirm: string;
   startDate: string; // ISO date — used as both sobriety_start_date and recovery_start_date
   drugClasses: DrugClassSelection[];
 }
+
+// Permissive on purpose — a sanity check against garbage, not RFC 5322
+// adjudication. Same shape used in sync-patient-login-email/index.ts and the
+// client screens; don't diverge.
+const LOOKS_LIKE_EMAIL = /^\S+@\S+\.\S+$/;
 
 function jsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -95,6 +102,8 @@ Deno.serve(async (req: Request) => {
 
   const fullName = body.fullName?.trim();
   const username = body.username?.trim().toLowerCase();
+  const patientEmail = body.patientEmail?.trim();
+  const patientEmailConfirm = body.patientEmailConfirm?.trim();
   const { password, startDate, drugClasses } = body;
 
   if (!fullName) return jsonResponse({ error: 'fullName is required' }, 400);
@@ -103,6 +112,15 @@ Deno.serve(async (req: Request) => {
   }
   if (!password || password.length < 8) {
     return jsonResponse({ error: 'password must be at least 8 characters' }, 400);
+  }
+  // The patient's real email is now mandatory and becomes their login identity
+  // (no synthetic address for new patients). Re-validated here, never trusting
+  // the client's own match check.
+  if (!patientEmail || !LOOKS_LIKE_EMAIL.test(patientEmail)) {
+    return jsonResponse({ error: 'A valid patient email is required' }, 400);
+  }
+  if (patientEmail !== patientEmailConfirm) {
+    return jsonResponse({ error: 'The two email addresses do not match' }, 400);
   }
   if (!startDate || Number.isNaN(Date.parse(startDate))) {
     return jsonResponse({ error: 'startDate must be a valid ISO date' }, 400);
@@ -118,20 +136,25 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Exactly one drug class must be marked primary' }, 400);
   }
 
-  const syntheticEmail = `${username}@patients.recovai.internal`;
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   // --- Step 3: create the auth user ---
+  // Real doctor-provided email as the login identity — no synthetic address for
+  // new patients. email_confirm: true marks it verified with no confirmation
+  // round-trip (the doctor vouches for it at creation).
   const { data: newUser, error: createUserError } = await adminClient.auth.admin.createUser({
-    email: syntheticEmail,
+    email: patientEmail,
     password,
-    email_confirm: true, // no real inbox for this address — skip confirmation
+    email_confirm: true,
     user_metadata: { role: 'patient' }, // tells the doctor-signup trigger to skip itself
   });
 
   if (createUserError || !newUser.user) {
+    // createUser now keys on the real email, so a collision here means the
+    // email — not the username — is already in use (a username clash instead
+    // surfaces at the profiles insert below, via its unique constraint).
     const message = createUserError?.message.includes('already been registered')
-      ? 'That username is already taken.'
+      ? 'An account with that email already exists.'
       : createUserError?.message ?? 'Failed to create patient account.';
     return jsonResponse({ error: message }, 400);
   }
@@ -144,6 +167,11 @@ Deno.serve(async (req: Request) => {
     role: 'patient',
     full_name: fullName,
     username,
+    // Mirror the login email onto contact_email so the patient is treated as
+    // already having an email from creation: Patient Detail hides the doctor's
+    // reset button, and the Profile "add your email" banner stays hidden — no
+    // onboarding step needed to reach that state.
+    contact_email: patientEmail,
     assigned_doctor_id: doctorId,
     sobriety_start_date: startDate,
     // The only place a profile is created with this false — the column

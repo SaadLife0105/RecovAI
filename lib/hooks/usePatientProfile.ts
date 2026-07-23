@@ -6,6 +6,8 @@ import { useSession } from './useSession';
 export interface PatientProfileData extends Profile {
   /** Resolved via a follow-up query on assignedDoctorId; null if the patient has no assigned doctor. */
   assignedDoctorName: string | null;
+  /** Same follow-up query; null if the doctor hasn't set a phone number yet. */
+  assignedDoctorPhone: string | null;
 }
 
 /** Patient's own profile, defaulting to the signed-in patient. */
@@ -36,15 +38,21 @@ export function usePatientProfile(patientId?: string): { data: PatientProfileDat
         return;
       }
 
+      // Reads the doctor's own profiles row. This only returns anything from
+      // migration 0018 onward, which added the select policy that finally
+      // permits it — see that migration's header for why it was silently
+      // empty before.
       let assignedDoctorName: string | null = null;
+      let assignedDoctorPhone: string | null = null;
       if (row.assigned_doctor_id) {
         const { data: doctorRow } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, phone')
           .eq('id', row.assigned_doctor_id)
           .single();
         if (!isMounted) return;
         assignedDoctorName = doctorRow?.full_name ?? null;
+        assignedDoctorPhone = doctorRow?.phone ?? null;
       }
 
       setData({
@@ -54,7 +62,12 @@ export function usePatientProfile(patientId?: string): { data: PatientProfileDat
         assignedDoctorId: row.assigned_doctor_id,
         archived: row.archived,
         sobrietyStartDate: row.sobriety_start_date,
+        avatarKey: row.avatar_key,
+        contactEmail: row.contact_email,
+        phone: row.phone,
+        dateOfBirth: row.date_of_birth,
         assignedDoctorName,
+        assignedDoctorPhone,
       });
       setIsLoading(false);
     })();

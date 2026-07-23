@@ -49,6 +49,14 @@ export function useDoctorProfile(doctorId?: string): { data: DoctorProfileData |
         assignedDoctorId: row.assigned_doctor_id,
         archived: row.archived,
         sobrietyStartDate: row.sobriety_start_date,
+        // Patient-onboarding fields; always null for doctors, mapped only to
+        // satisfy the shared Profile shape.
+        avatarKey: row.avatar_key,
+        contactEmail: row.contact_email,
+        phone: row.phone,
+        // Doctors have no DOB field on their edit screen; mapped for the
+        // shared Profile shape only.
+        dateOfBirth: row.date_of_birth,
         joinedDate: userData.user?.created_at ?? row.created_at,
         // No `specialty` field exists anywhere in the schema (profiles or
         // auth) — placeholder pending a real column, not a per-doctor value.

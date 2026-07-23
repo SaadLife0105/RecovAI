@@ -6,14 +6,45 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
+import { useToast } from '../../components/toast/ToastProvider';
+import { supabase } from '../../lib/supabase';
 
-/** Patient Change Password — reached from profile.tsx/edit-profile.tsx's Change Password row. Static UI; no real persistence yet. */
+/** Patient Change Password — reached from profile.tsx/edit-profile.tsx's Change Password row. */
 export default function ChangePassword() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (newPassword.length < 8) {
+      setErrorMessage('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMessage("Passwords don't match");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    showToast('Password updated.', 'success');
+    router.back();
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -34,6 +65,8 @@ export default function ChangePassword() {
               placeholder="Enter new password"
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showNewPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
               className="flex-1 py-3 text-text-dark"
             />
             <Pressable
@@ -53,6 +86,8 @@ export default function ChangePassword() {
               placeholder="Confirm new password"
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
               className="flex-1 py-3 text-text-dark"
             />
             <Pressable
@@ -64,12 +99,21 @@ export default function ChangePassword() {
             </Pressable>
           </View>
 
+          {errorMessage && (
+            <Text className="mt-4 text-center text-sm" style={{ color: colors.riskHigh }}>
+              {errorMessage}
+            </Text>
+          )}
+
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleSave}
+            disabled={isSubmitting}
             className="mt-6 items-center rounded-2xl py-4"
-            style={{ backgroundColor: colors.primary }}
+            style={{ backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 }}
           >
-            <Text className="text-base font-semibold text-white">Save Password</Text>
+            <Text className="text-base font-semibold text-white">
+              {isSubmitting ? 'Saving...' : 'Save Password'}
+            </Text>
           </Pressable>
         </ScrollView>
 

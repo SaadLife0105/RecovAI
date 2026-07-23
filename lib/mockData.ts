@@ -29,6 +29,10 @@ export const PATIENT_PROFILE: Profile = {
   assignedDoctorId: DOCTOR_ID,
   archived: false,
   sobrietyStartDate: '2025-05-10',
+  avatarKey: null,
+  contactEmail: null,
+  phone: null,
+  dateOfBirth: null,
 };
 
 // Doctor-only display fields (specialty, joinedDate) aren't part of the
@@ -46,6 +50,10 @@ export const DOCTOR_PROFILE: DoctorProfileMock = {
   assignedDoctorId: null,
   archived: false,
   sobrietyStartDate: null,
+  avatarKey: null,
+  contactEmail: null,
+  phone: null,
+  dateOfBirth: null,
   specialty: 'Addiction Specialist',
   joinedDate: '2024-01-15',
 };
@@ -77,8 +85,8 @@ export const CHECK_INS: CheckIn[] = [
 export const CURRENT_STREAK = 14;
 export const LONGEST_STREAK = 14;
 
-// Zone coordinates aren't shown anywhere in the built UI (zones.tsx only
-// lists name/radius/type) — the one coordinate shown anywhere is the
+// Zone coordinates aren't shown anywhere in the built UI (Patient Detail's
+// Zones tab only lists name/radius/type) — the one coordinate shown is the
 // generic placeholder on add-zone.tsx, reused here for all zones since
 // no per-zone coordinates exist to extract.
 const MOCK_LAT = -20.1531;
@@ -160,7 +168,6 @@ export const CHAT_MESSAGES: ChatMessage[] = [
 // category as edit-profile.tsx's MOCK_DOB/MOCK_PHONE/MOCK_EMAIL, kept
 // here so profile.tsx and edit-profile.tsx share one source instead of
 // each hardcoding their own copy.
-export const PATIENT_PREFERENCES = { checkInReminderTime: '8:00 PM', notificationsEnabled: true };
 
 export const DOCTOR_CASELOAD_STATS = {
   totalPatients: 128,

@@ -115,9 +115,21 @@ async function processLocationUpdate(
   await AsyncStorage.setItem(INSIDE_ZONE_IDS_KEY, JSON.stringify([...insideSet]));
 }
 
-export async function registerBackgroundLocationTaskAsync(): Promise<boolean> {
+/**
+ * Two genuinely different reasons this can fail to start, and the caller
+ * needs to know which — found 2026-07-22 when a real device log showed
+ * "Background location permission denied" immediately after a run where
+ * permission was almost certainly granted; the real cause was the
+ * foreground-service-start failure below, and the old `boolean` return
+ * couldn't tell the two apart, so the caller's warning was actively wrong.
+ */
+export type BackgroundLocationResult =
+  | { started: true }
+  | { started: false; reason: 'permission_denied' | 'foreground_service_start_failed' };
+
+export async function registerBackgroundLocationTaskAsync(): Promise<BackgroundLocationResult> {
   const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-  if (bgStatus !== 'granted') return false;
+  if (bgStatus !== 'granted') return { started: false, reason: 'permission_denied' };
 
   // Unconditional stop-then-start: a registered-but-not-started task (a
   // zombie left behind by a crashed prior attempt) would otherwise get
@@ -160,8 +172,8 @@ export async function registerBackgroundLocationTaskAsync(): Promise<boolean> {
       'startLocationUpdatesAsync failed — background zone monitoring will not be active this session:',
       e instanceof Error ? e.message : String(e)
     );
-    return false;
+    return { started: false, reason: 'foreground_service_start_failed' };
   }
 
-  return true;
+  return { started: true };
 }

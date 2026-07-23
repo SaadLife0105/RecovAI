@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
 import { useDoctorNote, saveDoctorNote } from '../../lib/hooks/useDoctorNote';
 import { formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 
 /** Screen 33 — Edit Doctor Note. Persists to doctor_notes; patient/[id].tsx reflects the edit on return. */
@@ -95,8 +94,6 @@ export default function EditNote() {
             </Pressable>
           </View>
         </View>
-
-        <SOSButton />
 
         <DoctorTabBar active="dashboard" />
       </View>

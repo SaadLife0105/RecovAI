@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, riskBand } from '../../constants/theme';
 import { PatientListRow, PatientRowData } from '../../components/cards/PatientListRow';
 import { PatientListSkeleton } from '../../components/skeletons/PatientListSkeleton';
-import { SOSButton } from '../../components/sos/SOSButton';
+import { EmptyStateCard } from '../../components/cards/EmptyStateCard';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { usePatients } from '../../lib/hooks/usePatients';
 
@@ -55,16 +55,8 @@ export default function DoctorDashboard() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-          <View className="mt-2 flex-row items-center justify-between">
-            <Ionicons name="menu-outline" size={24} color={colors.textDark} />
+          <View className="mt-2">
             <Text className="text-2xl font-bold text-text-dark">Mission Control</Text>
-            <View>
-              <Ionicons name="notifications-outline" size={24} color={colors.textDark} />
-              <View
-                className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border"
-                style={{ backgroundColor: colors.riskHigh, borderColor: colors.background }}
-              />
-            </View>
           </View>
 
           <View className="mt-4 flex-row items-center rounded-xl bg-card px-4 py-3">
@@ -123,6 +115,18 @@ export default function DoctorDashboard() {
           <Text className="mb-2 mt-6 text-sm font-semibold text-text-dark">Patients (Sorted by current risk)</Text>
           {loading ? (
             <PatientListSkeleton />
+          ) : data.totalPatients === 0 ? (
+            <EmptyStateCard
+              illustration={require('../../assets/illustrations/31-helping-hands.png')}
+              title="Add your first patient to start monitoring"
+              subtitle="Once you add a patient, their check-ins, risk score, and alerts will all show up here."
+            />
+          ) : visiblePatients.length === 0 ? (
+            <EmptyStateCard
+              illustration={require('../../assets/illustrations/31-helping-hands.png')}
+              title="No patients match this filter"
+              subtitle="Try a different filter or search term."
+            />
           ) : (
             visiblePatients.map((patient) => (
               <PatientListRow
@@ -142,8 +146,6 @@ export default function DoctorDashboard() {
         >
           <Ionicons name="person-add" size={22} color="#FFFFFF" />
         </Pressable>
-
-        <SOSButton />
 
         <DoctorTabBar active="dashboard" />
       </View>

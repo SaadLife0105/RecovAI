@@ -7,6 +7,7 @@ import { useSession } from '../../lib/hooks/useSession';
 import { PassiveDataProvider } from '../../lib/context/PassiveDataContext';
 import { registerBackgroundLocationTaskAsync } from '../../lib/backgroundLocationTask';
 import { registerPushTokenAsync } from '../../lib/registerPushToken';
+import { scheduleCheckInReminder, cancelCheckInReminder } from '../../lib/checkinReminder';
 
 export default function PatientLayout() {
   const { session } = useSession();
@@ -16,13 +17,18 @@ export default function PatientLayout() {
   // --- First-login walkthrough gate ---
   // The ONLY place that decides whether onboarding shows. onboarding.tsx just
   // writes the flag and navigates; it never re-checks, so the two screens
-  // can't bounce off each other. The redirect also fires at most once per
-  // mount (the ref), so returning here from home mid-session is a no-op.
+  // can't bounce off each other.
   //
-  // `null` = not resolved yet. The Stack is held back until it resolves, so a
-  // new patient never sees a frame of the home screen before the walkthrough.
+  // `null` = not resolved yet. The Stack is held back until it resolves AND,
+  // if onboarding is needed, until the redirect has actually been issued —
+  // switching to <Stack /> the instant needsOnboarding flips to true (before
+  // the redirect effect below has run) would show one frame of whatever
+  // route was originally requested (e.g. Home) before replace() fires. Found
+  // 2026-07-22 as a real, visible flash on login. `hasRedirected` is state,
+  // not a ref, specifically so setting it re-renders and this gate re-checks
+  // before Stack ever mounts on the wrong route.
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
-  const hasRedirectedToOnboarding = useRef(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -45,19 +51,65 @@ export default function PatientLayout() {
   }, [patientId]);
 
   useEffect(() => {
-    if (needsOnboarding && !hasRedirectedToOnboarding.current) {
-      hasRedirectedToOnboarding.current = true;
+    if (needsOnboarding && !hasRedirected) {
+      setHasRedirected(true);
       router.replace('/(patient)/onboarding');
     }
-  }, [needsOnboarding, router]);
+  }, [needsOnboarding, hasRedirected, router]);
 
   useEffect(() => {
     if (patientId) {
-      registerBackgroundLocationTaskAsync().then((granted) => {
-        if (!granted)
+      registerBackgroundLocationTaskAsync().then((result) => {
+        // Two genuinely different reasons this can fail — found 2026-07-22
+        // when a device log showed "permission denied" right after a run
+        // where permission was almost certainly granted; the real cause was
+        // a transient Android foreground-service-start rejection, which the
+        // old boolean return couldn't distinguish from a real permission
+        // denial. Each reason now gets its own accurate message.
+        if (result.started) return;
+        if (result.reason === 'permission_denied') {
           console.warn('Background location permission denied — zone_breaches will only log while the app is open.');
+        } else {
+          console.warn(
+            'Background location monitoring did not start this session (the OS refused to start the foreground service — a known, intermittent Android restriction, see BUILD_TROUBLESHOOTING.md). Not a permission issue; zone_breaches will still log while the app is open.'
+          );
+        }
       });
     }
+  }, [patientId]);
+
+  // --- Re-apply the daily check-in reminder on launch ---
+  // Scheduled local notifications do NOT survive a reinstall (and can be lost
+  // when the OS clears app data), so the stored preference is the source of
+  // truth and the schedule is re-derived from it every launch. Cheap and
+  // idempotent: scheduleCheckInReminder cancels the previous one first, so
+  // this can never stack duplicates.
+  //
+  // The `false` branch is not redundant — it repairs the case where the
+  // toggle was turned off on another device (or the write succeeded while the
+  // local cancel didn't), which would otherwise leave this device firing a
+  // reminder the patient has already switched off.
+  useEffect(() => {
+    if (!patientId) return;
+
+    let isMounted = true;
+    supabase
+      .from('profiles')
+      .select('checkin_reminder_enabled, checkin_reminder_time')
+      .eq('id', patientId)
+      .single()
+      .then(({ data, error }) => {
+        if (!isMounted || error || !data) return;
+        if (data.checkin_reminder_enabled) {
+          scheduleCheckInReminder(data.checkin_reminder_time);
+        } else {
+          cancelCheckInReminder();
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [patientId]);
 
   // Same pattern as the doctor layout — patients need a token too, so the
@@ -120,7 +172,7 @@ export default function PatientLayout() {
 
   return (
     <PassiveDataProvider patientId={patientId}>
-      {needsOnboarding === null ? (
+      {needsOnboarding === null || (needsOnboarding === true && !hasRedirected) ? (
         <View className="flex-1 bg-background" />
       ) : (
         <Stack screenOptions={{ headerShown: false }} />

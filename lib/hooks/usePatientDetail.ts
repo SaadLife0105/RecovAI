@@ -9,6 +9,8 @@ export interface PatientDetailData {
   username: string | null;
   archived: boolean;
   flagged: boolean; // profiles.flagged_for_urgent_review — agent raises, doctor clears
+  contactEmail: string | null; // real email if the patient has set one — gates the doctor's password-reset ability
+
   latestScore: number | null;
   trendData: number[]; // chronological, up to last 7 check-ins
   trendDelta: number | null; // null if fewer than 2 check-ins exist — not enough data for a trend
@@ -74,6 +76,7 @@ export function usePatientDetail(patientId?: string): {
         username: profileRow.username,
         archived: profileRow.archived,
         flagged: profileRow.flagged_for_urgent_review === true,
+        contactEmail: profileRow.contact_email,
         latestScore,
         trendData,
         trendDelta,

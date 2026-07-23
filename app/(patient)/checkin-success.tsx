@@ -89,7 +89,7 @@ export default function CheckInSuccess() {
 
         <SOSButton />
 
-        <BottomTabBar active="checkin" />
+        <BottomTabBar />
       </View>
     </SafeAreaView>
   );

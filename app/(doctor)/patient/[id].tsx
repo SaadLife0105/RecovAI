@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, Share } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, Share, Alert as RNAlert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,28 +8,28 @@ import { RiskGauge } from '../../../components/gauges/RiskGauge';
 import { MiniSparkline } from '../../../components/sparklines/MiniSparkline';
 import { RiskTrendChart } from '../../../components/charts/RiskTrendChart';
 import { AlertRow } from '../../../components/cards/AlertRow';
-import { SOSButton } from '../../../components/sos/SOSButton';
 import { ArchivePatientModal } from '../../../components/modals/ArchivePatientModal';
+import { ResetPatientPasswordModal } from '../../../components/modals/ResetPatientPasswordModal';
+import { useToast } from '../../../components/toast/ToastProvider';
+import { supabase } from '../../../lib/supabase';
 import { useDoctorNote } from '../../../lib/hooks/useDoctorNote';
 import { usePatientDetail, setPatientArchived, clearUrgentReviewFlag } from '../../../lib/hooks/usePatientDetail';
 import { usePatientAlertsForDoctor } from '../../../lib/hooks/usePatientAlertsForDoctor';
+import { usePatientCheckInsForDoctor } from '../../../lib/hooks/usePatientCheckInsForDoctor';
+import { useRiskZones, deleteRiskZone } from '../../../lib/hooks/useRiskZones';
+import { ZONE_TYPE_META, ZONE_STATUS_META } from '../../../lib/zoneTypes';
+import { EmptyStateCard } from '../../../components/cards/EmptyStateCard';
 import { usePatientReportHistory } from '../../../lib/hooks/usePatientReportHistory';
 import { useReportWeekDetail, type ReportWeekDetail } from '../../../lib/hooks/useReportWeekDetail';
 import { WeeklyCheckinGrid } from '../../../components/reports/WeeklyCheckinGrid';
 import { ALERT_TYPE_META, FALLBACK_ALERT_META, dayLabel } from '../../../lib/alertMeta';
-import { formatTimestamp, formatTime, formatDateRange, toDeviceLocalIsoString } from '../../../lib/formatDate';
+import { formatTimestamp, formatTime, formatDateLabel, formatDateRange, toDeviceLocalIsoString } from '../../../lib/formatDate';
 import { addDaysToDateString } from '../../../lib/mauritiusTime';
 import type { WeeklyReport } from '../../../lib/types';
+import { AI_DISCLAIMER } from '../../../lib/supportDisclaimers';
 
 const TABS = ['Overview', 'Check-ins', 'Alerts', 'Zones', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
-
-const TAB_ICONS: Record<Exclude<Tab, 'Overview'>, keyof typeof Ionicons.glyphMap> = {
-  'Check-ins': 'checkmark-circle-outline',
-  Alerts: 'notifications-outline',
-  Zones: 'map-outline',
-  Reports: 'document-text-outline',
-};
 
 const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -91,7 +91,7 @@ function reportShareText(report: WeeklyReport, checkinDates: Set<string>, detail
   return lines.join('\n');
 }
 
-/** Screen 16 — Patient Detail (Doctor). Overview and Reports tabs are built; Check-ins and Alerts are still placeholders. */
+/** Screen 16 — Patient Detail (Doctor). All five tabs are built and render inline; nothing routes away except Add/Edit Zone. */
 export default function PatientDetail() {
   const router = useRouter();
   // `tab` is optional — the Reports screen deep-links straight into the
@@ -102,9 +102,15 @@ export default function PatientDetail() {
   );
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const { showToast } = useToast();
   const { data: patient, refetch: refetchPatient } = usePatientDetail(id);
   const { data: note } = useDoctorNote(id);
-  const { data: alerts } = usePatientAlertsForDoctor(id);
+  const { data: alerts, markRead } = usePatientAlertsForDoctor(id);
+  const { data: patientCheckIns } = usePatientCheckInsForDoctor(id);
+  const { data: zones, refetch: refetchZones } = useRiskZones(id);
   // Same id the other hooks use — patient may still be loading below, and
   // hooks can't be called conditionally.
   const { data: reports, checkinDates } = usePatientReportHistory(id);
@@ -112,6 +118,33 @@ export default function PatientDetail() {
   // reopening a week never refetches or re-invokes the summary function.
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const { getDetail, loadDetail } = useReportWeekDetail();
+  // Alerts tab accordion — same one-open-at-a-time pattern as the reports
+  // accordion above; expanding is also what marks the alert read.
+  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
+
+  const toggleAlert = (alertId: string) => {
+    if (expandedAlertId === alertId) {
+      setExpandedAlertId(null);
+      return;
+    }
+    setExpandedAlertId(alertId);
+    markRead(alertId);
+  };
+
+  const confirmDeleteZone = (zoneId: string) => {
+    RNAlert.alert('Delete this zone?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await deleteRiskZone(zoneId);
+          if (error) showToast("Couldn't delete this zone. Please try again.");
+          refetchZones();
+        },
+      },
+    ]);
+  };
 
   const toggleReport = (report: WeeklyReport) => {
     if (expandedReportId === report.id) {
@@ -143,6 +176,25 @@ export default function PatientDetail() {
       return;
     }
     router.back();
+  };
+
+  const handleResetPassword = async (newPassword: string) => {
+    setIsResetting(true);
+    setResetError(null);
+
+    const { data, error } = await supabase.functions.invoke('reset-patient-password', {
+      body: { patientId: id, newPassword },
+    });
+
+    if (error || data?.error) {
+      setResetError(data?.error ?? error!.message);
+      setIsResetting(false);
+      return;
+    }
+
+    setIsResetting(false);
+    setResetModalOpen(false);
+    showToast('Password reset. Share the new password with your patient.', 'success');
   };
 
   // Stays on this screen, so it refetches inline rather than relying on the
@@ -206,7 +258,6 @@ export default function PatientDetail() {
                 <Text className="text-xs text-text-muted">ID: {patient.username ?? patient.id.slice(0, 8)}</Text>
               </View>
             </View>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} />
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4 -mx-5 px-5">
@@ -216,11 +267,7 @@ export default function PatientDetail() {
                 return (
                   <Pressable
                     key={tab}
-                    onPress={() =>
-                      tab === 'Zones'
-                        ? router.push({ pathname: '/(doctor)/zones', params: { patientId: patient.id, patientName: patient.name } })
-                        : setActiveTab(tab)
-                    }
+                    onPress={() => setActiveTab(tab)}
                     className="rounded-full px-4 py-2"
                     style={{ backgroundColor: isActive ? colors.secondary : colors.card }}
                   >
@@ -315,6 +362,9 @@ export default function PatientDetail() {
                     <Text className="mt-1 text-xs" style={{ color: colors.riskHighText }}>
                       {xai}
                     </Text>
+                    <Text className="mt-1 text-[10px]" style={{ color: colors.riskHighText, opacity: 0.75 }}>
+                      {AI_DISCLAIMER}
+                    </Text>
                   </View>
                 </View>
               ) : (
@@ -387,6 +437,35 @@ export default function PatientDetail() {
                     Clear Urgent Review Flag
                   </Text>
                 </Pressable>
+              ) : null}
+
+              {/* Reset Password is only the doctor's job while the patient
+                  still logs in with the synthetic address. Once they set a real
+                  email, they own their own reset (and the Edge Function refuses
+                  a doctor reset anyway) — so hide the button and say why, rather
+                  than leave a silent gap that reads as a bug. Archived hiding is
+                  a separate, unchanged condition layered on top. */}
+              {!patient.archived && !patient.contactEmail ? (
+                <Pressable
+                  onPress={() => {
+                    setResetError(null);
+                    setResetModalOpen(true);
+                  }}
+                  className="mt-5 flex-row items-center justify-center rounded-2xl border-2 py-4"
+                  style={{ borderColor: colors.secondary }}
+                >
+                  <Ionicons name="key-outline" size={18} color={colors.secondary} style={{ marginRight: 6 }} />
+                  <Text className="text-base font-semibold" style={{ color: colors.secondary }}>
+                    Reset Password
+                  </Text>
+                </Pressable>
+              ) : !patient.archived && patient.contactEmail ? (
+                <View className="mt-5 flex-row items-center rounded-2xl bg-card px-4 py-4">
+                  <Ionicons name="key-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
+                  <Text className="flex-1 text-xs text-text-muted">
+                    This patient has added their own email and can reset their own password.
+                  </Text>
+                </View>
               ) : null}
 
               {patient.archived ? (
@@ -508,7 +587,12 @@ export default function PatientDetail() {
                               {detail.summaryError}
                             </Text>
                           ) : (
-                            <Text className="mt-1 text-xs leading-5 text-text-muted">{detail?.aiSummary}</Text>
+                            <>
+                              <Text className="mt-1 text-xs leading-5 text-text-muted">{detail?.aiSummary}</Text>
+                              {detail?.aiSummary ? (
+                                <Text className="mt-1 text-[10px] text-text-muted">{AI_DISCLAIMER}</Text>
+                              ) : null}
+                            </>
                           )}
 
                           <Text className="mt-4 text-xs font-semibold text-text-dark">Alerts this week</Text>
@@ -558,18 +642,175 @@ export default function PatientDetail() {
                 })
               )}
             </View>
+          ) : activeTab === 'Alerts' ? (
+            <View className="mt-5">
+              {alerts.length === 0 ? (
+                <EmptyStateCard
+                  illustration={require('../../../assets/illustrations/08-shield-with-checkmark.png')}
+                  title="No alerts"
+                  subtitle="Nothing has needed your attention for this patient yet."
+                />
+              ) : (
+                alerts.map((alert) => {
+                  const typeMeta = ALERT_TYPE_META[alert.type] ?? FALLBACK_ALERT_META;
+                  const localCreatedAt = toDeviceLocalIsoString(alert.createdAt);
+                  const isHigh = typeMeta.badgeLabel === 'High Risk' || typeMeta.badgeLabel === 'Relapse Logged';
+                  return (
+                    <AlertRow
+                      key={alert.id}
+                      dotColor={typeMeta.dotColor}
+                      title={typeMeta.badgeLabel}
+                      message={typeMeta.message}
+                      badge={{
+                        label: alert.read ? 'Read' : 'Unread',
+                        bg: isHigh ? colors.riskHighBg : colors.riskMediumBg,
+                        text: isHigh ? colors.riskHighText : colors.riskMediumText,
+                      }}
+                      meta={`${dayLabel(localCreatedAt)}, ${formatTime(localCreatedAt)}`}
+                      expanded={expandedAlertId === alert.id}
+                      onPress={() => toggleAlert(alert.id)}
+                    >
+                      {/* No patient name/link here — this screen is already
+                          scoped to one patient. */}
+                      <Text className="text-xs font-semibold text-text-dark">Why this fired</Text>
+                      <Text className="mt-1 text-xs leading-5 text-text-muted">
+                        {alert.xaiExplanation ?? 'No AI explanation was generated for this alert.'}
+                      </Text>
+                      {alert.xaiExplanation ? (
+                        <Text className="mt-1 text-[10px] text-text-muted">{AI_DISCLAIMER}</Text>
+                      ) : null}
+
+                      <Text className="mt-3 text-xs font-semibold text-text-dark">When</Text>
+                      <Text className="mt-1 text-xs text-text-muted">{formatTimestamp(localCreatedAt)}</Text>
+                    </AlertRow>
+                  );
+                })
+              )}
+            </View>
+          ) : activeTab === 'Check-ins' ? (
+            <View className="mt-5">
+              {patientCheckIns.length === 0 ? (
+                <EmptyStateCard
+                  illustration={require('../../../assets/illustrations/07-calendar-with-checkmark.png')}
+                  title="No check-ins yet"
+                  subtitle="This patient hasn't logged a daily check-in yet."
+                />
+              ) : (
+                patientCheckIns.map((checkIn) => {
+                  const band = riskBandColors(checkIn.riskScore);
+                  return (
+                    <View key={checkIn.id} className="mb-3 rounded-2xl bg-card p-4">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-sm font-semibold text-text-dark">{formatDateLabel(checkIn.date)}</Text>
+                        <View className="flex-row items-center">
+                          <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: band.bg }}>
+                            <Text className="text-[11px] font-semibold" style={{ color: band.text }}>
+                              {checkIn.riskScore}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View className="mt-3 flex-row">
+                        {[
+                          { label: 'Mood', value: checkIn.mood },
+                          { label: 'Sleep', value: checkIn.sleep },
+                          { label: 'Craving', value: checkIn.craving },
+                        ].map((metric) => (
+                          <View key={metric.label} className="flex-1">
+                            <Text className="text-[11px] text-text-muted">{metric.label}</Text>
+                            <Text className="mt-0.5 text-sm font-semibold text-text-dark">{metric.value}/10</Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      <View className="mt-3 flex-row items-center">
+                        <Ionicons name="footsteps-outline" size={13} color={colors.textMuted} />
+                        <Text className="ml-1 mr-4 text-xs text-text-muted">{checkIn.steps.toLocaleString()} steps</Text>
+                        <Text className="text-xs text-text-muted">
+                          Logged {formatTime(toDeviceLocalIsoString(checkIn.createdAt))}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
           ) : (
-            <View className="mt-16 items-center px-8">
-              <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-surface">
-                <Ionicons name={TAB_ICONS[activeTab]} size={28} color={colors.primary} />
-              </View>
-              <Text className="text-lg font-bold text-text-dark">{activeTab}</Text>
-              <Text className="mt-1 text-center text-sm text-text-muted">Coming soon.</Text>
+            <View className="mt-5">
+              {zones.length === 0 ? (
+                <EmptyStateCard
+                  illustration={require('../../../assets/illustrations/18-map-with-circular-geofence-around-pin.png')}
+                  title="No zones yet"
+                  subtitle="Add risk or safe zones to help detect when this patient enters an area of concern."
+                />
+              ) : (
+                zones.map((zone) => {
+                  // zone_type is optional — omit the type icon when absent
+                  // (the label is the primary identifier), rather than a fallback.
+                  const typeMeta = zone.zoneType ? ZONE_TYPE_META[zone.zoneType] : null;
+                  const statusMeta = ZONE_STATUS_META[zone.classification];
+                  return (
+                    <View key={zone.id} className="mb-3 flex-row items-center rounded-2xl bg-card p-4">
+                      {typeMeta ? (
+                        <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: typeMeta.bg }}>
+                          <Ionicons name={typeMeta.icon} size={18} color={typeMeta.color} />
+                        </View>
+                      ) : null}
+                      <View className={`flex-1 ${typeMeta ? 'ml-3' : ''}`}>
+                        <Text className="text-sm font-semibold text-text-dark">{zone.label}</Text>
+                        <View className="mt-1 flex-row items-center">
+                          <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: statusMeta.bg }}>
+                            <Text className="text-[11px] font-semibold" style={{ color: statusMeta.color }}>
+                              {statusMeta.label}
+                            </Text>
+                          </View>
+                          <Text className="ml-2 text-xs text-text-muted">Radius: {zone.radiusM}m</Text>
+                        </View>
+                      </View>
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname: '/(doctor)/add-zone',
+                            params: { patientId: patient.id, patientName: patient.name, zoneId: zone.id },
+                          })
+                        }
+                        accessibilityLabel={`Edit zone ${zone.label}`}
+                        hitSlop={8}
+                        className="h-9 w-9 items-center justify-center"
+                      >
+                        <Ionicons name="create-outline" size={18} color={colors.textMuted} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => confirmDeleteZone(zone.id)}
+                        accessibilityLabel={`Delete zone ${zone.label}`}
+                        hitSlop={8}
+                        className="h-9 w-9 items-center justify-center"
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
+
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/(doctor)/add-zone',
+                    params: { patientId: patient.id, patientName: patient.name },
+                  })
+                }
+                className="mt-2 items-center rounded-2xl border-2 py-4"
+                style={{ borderColor: colors.secondary }}
+              >
+                <Text className="text-base font-semibold" style={{ color: colors.secondary }}>
+                  Add New Zone
+                </Text>
+              </Pressable>
             </View>
           )}
         </ScrollView>
-
-        <SOSButton />
       </View>
 
       <ArchivePatientModal
@@ -578,6 +819,15 @@ export default function PatientDetail() {
         errorMessage={archiveError}
         onClose={() => setArchiveModalOpen(false)}
         onConfirm={confirmArchive}
+      />
+
+      <ResetPatientPasswordModal
+        visible={resetModalOpen}
+        patientName={patient.name}
+        isSubmitting={isResetting}
+        errorMessage={resetError}
+        onClose={() => setResetModalOpen(false)}
+        onConfirm={handleResetPassword}
       />
     </SafeAreaView>
   );

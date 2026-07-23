@@ -7,9 +7,8 @@ import Slider from '@react-native-community/slider';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { colors } from '../../constants/theme';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { ZONE_TYPE_META } from '../../lib/zoneTypes';
-import { createRiskZone } from '../../lib/hooks/useRiskZones';
+import { createRiskZone, updateRiskZone, fetchRiskZone } from '../../lib/hooks/useRiskZones';
 
 const ZONE_TYPES = Object.entries(ZONE_TYPE_META).map(([key, { label, color }]) => ({ key, label, color }));
 
@@ -33,25 +32,56 @@ const MAURITIUS_REGION: Region = {
   longitudeDelta: 0.5,
 };
 
-/** Screen 17/38 — Risk Zone Management. Real map + save. */
+/** Screen 17/38 — Risk Zone Management. Real map + save. Doubles as the edit screen when given a `zoneId`. */
 export default function AddZone() {
   const router = useRouter();
-  const { patientId, patientName } = useLocalSearchParams<{ patientId: string; patientName: string }>();
+  const { patientId, patientName, zoneId } = useLocalSearchParams<{
+    patientId: string;
+    patientName: string;
+    zoneId?: string;
+  }>();
+  const isEditing = !!zoneId;
   const [selectedZoneType, setSelectedZoneType] = useState<string | null>(null);
   const [radius, setRadius] = useState(300);
   const [status, setStatus] = useState<ZoneStatus>('safe');
   const [label, setLabel] = useState('');
   const [region, setRegion] = useState<Region>(MAURITIUS_REGION);
   const [marker, setMarker] = useState<{ latitude: number; longitude: number } | null>(null);
+  // In edit mode the form must not be submittable until the existing zone has
+  // loaded, or Save would overwrite it with the blank defaults above.
+  const [isLoadingZone, setIsLoadingZone] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // On mount, center on the doctor's current location and drop an initial
+  // Creating: center on the doctor's current location and drop an initial
   // marker there (they're often at/near the place they're flagging). If
   // permission is denied/unavailable, fall back to Mauritius with no marker.
+  //
+  // Editing: skip all of that and center on the zone's own saved pin instead —
+  // asking for location permission, then yanking the map to wherever the
+  // doctor happens to be standing, would be actively wrong here.
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
+      if (isEditing) {
+        const { data: zone, error } = await fetchRiskZone(zoneId!);
+        if (cancelled) return;
+        if (error || !zone) {
+          setErrorMessage(error ?? 'That zone no longer exists.');
+          setIsLoadingZone(false);
+          return;
+        }
+        setSelectedZoneType(zone.zoneType);
+        setRadius(zone.radiusM);
+        setStatus(zone.classification);
+        setLabel(zone.label);
+        setMarker({ latitude: zone.lat, longitude: zone.lng });
+        setRegion({ latitude: zone.lat, longitude: zone.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 });
+        setIsLoadingZone(false);
+        return;
+      }
+
       const { status: perm } = await Location.requestForegroundPermissionsAsync();
       if (perm !== 'granted') return;
       try {
@@ -64,10 +94,11 @@ export default function AddZone() {
         // keep Mauritius fallback
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isEditing, zoneId]);
 
   const statusMeta = ZONE_STATUS_OPTIONS.find((o) => o.key === status)!;
 
@@ -87,15 +118,18 @@ export default function AddZone() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const { error } = await createRiskZone({
-      patientId,
+    const fields = {
       lat: marker!.latitude,
       lng: marker!.longitude,
       radiusM: radius,
       zoneType: selectedZoneType ?? null,
       classification: status,
       label: label.trim(),
-    });
+    };
+
+    const { error } = isEditing
+      ? await updateRiskZone(zoneId!, fields)
+      : await createRiskZone({ patientId, ...fields });
 
     if (error) {
       setErrorMessage(error);
@@ -122,7 +156,7 @@ export default function AddZone() {
               <Ionicons name="chevron-back" size={24} color={colors.textDark} />
             </Pressable>
             <View>
-              <Text className="text-xl font-bold text-text-dark">Risk Zone Management</Text>
+              <Text className="text-xl font-bold text-text-dark">{isEditing ? 'Edit Zone' : 'Risk Zone Management'}</Text>
               <Text className="text-xs text-text-muted">{patientName}</Text>
             </View>
           </View>
@@ -248,15 +282,15 @@ export default function AddZone() {
 
           <Pressable
             onPress={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isLoadingZone}
             className="mt-6 items-center rounded-2xl py-4"
-            style={{ backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 }}
+            style={{ backgroundColor: colors.primary, opacity: isSubmitting || isLoadingZone ? 0.6 : 1 }}
           >
-            <Text className="text-base font-semibold text-white">{isSubmitting ? 'Saving...' : 'Save Zone'}</Text>
+            <Text className="text-base font-semibold text-white">
+              {isLoadingZone ? 'Loading...' : isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Zone'}
+            </Text>
           </Pressable>
         </ScrollView>
-
-        <SOSButton />
       </View>
     </SafeAreaView>
   );

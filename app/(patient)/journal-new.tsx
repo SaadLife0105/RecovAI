@@ -8,6 +8,7 @@ import { MOOD_LEVELS, MoodKey } from '../../lib/moodLevels';
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/hooks/useSession';
 import { getMauritiusDateString } from '../../lib/mauritiusTime';
+import { formatDateLabel } from '../../lib/formatDate';
 
 const MAX_LENGTH = 2000;
 
@@ -61,7 +62,7 @@ export default function JournalNew() {
         </View>
 
         <View className="mt-5 flex-row items-center justify-between rounded-xl bg-card px-4 py-3">
-          <Text className="text-sm text-text-dark">May 24, 2025</Text>
+          <Text className="text-sm text-text-dark">{formatDateLabel(getMauritiusDateString())}</Text>
           <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
         </View>
 

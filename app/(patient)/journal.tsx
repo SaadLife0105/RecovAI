@@ -67,7 +67,11 @@ export default function Journal() {
               {entries.map((entry) => {
                 const level = getMoodLevel(entry.moodLevel);
                 return (
-                  <Pressable key={entry.id} className="mb-3 flex-row items-center rounded-2xl bg-card p-3">
+                  <Pressable
+                    key={entry.id}
+                    onPress={() => router.push({ pathname: '/(patient)/journal/[id]', params: { id: entry.id } })}
+                    className="mb-3 flex-row items-center rounded-2xl bg-card p-3"
+                  >
                     <View className="h-11 w-11 items-center justify-center rounded-full" style={{ backgroundColor: level.bg }}>
                       <MaterialCommunityIcons name={level.icon} size={22} color={level.color} />
                     </View>
@@ -119,15 +123,6 @@ export default function Journal() {
             </View>
           )}
         </ScrollView>
-
-        <Pressable
-          onPress={() => router.push('/(patient)/journal-new')}
-          accessibilityLabel="New journal entry"
-          className="absolute bottom-8 right-5 h-14 w-14 items-center justify-center rounded-full shadow-lg"
-          style={{ backgroundColor: colors.primary }}
-        >
-          <Ionicons name="add" size={28} color="#FFFFFF" />
-        </Pressable>
 
         <SOSButton />
 

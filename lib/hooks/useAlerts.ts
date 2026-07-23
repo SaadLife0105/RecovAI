@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from '../types';
 import { supabase } from '../supabase';
 import { useSession } from './useSession';
@@ -35,7 +35,23 @@ function rowToAlert(row: {
  * rows for this doctor arrive the moment they're written, RLS-scoped the
  * same as any other read.
  */
-export function useAlerts(doctorId?: string): { data: Alert[]; isLoading: boolean; error: null } {
+/**
+ * Flip an alert to read. Nothing in the codebase ever set this before, so
+ * every alert stayed "Unread" forever — expanding a row is now what marks it.
+ * Fire-and-forget by design: the caller updates its own list optimistically,
+ * and a failed write just means the row reappears unread on the next fetch.
+ */
+export async function markAlertRead(alertId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('alerts').update({ read: true }).eq('id', alertId);
+  return { error: error ? error.message : null };
+}
+
+export function useAlerts(doctorId?: string): {
+  data: Alert[];
+  isLoading: boolean;
+  error: null;
+  markRead: (alertId: string) => void;
+} {
   const { session } = useSession();
   const resolvedDoctorId = doctorId ?? session?.user.id;
 
@@ -71,6 +87,23 @@ export function useAlerts(doctorId?: string): { data: Alert[]; isLoading: boolea
         setData(alerts);
         setIsLoading(false);
       });
+
+    // Defensive guard against a real race: if this effect re-runs before the
+    // PREVIOUS run's cleanup (`removeChannel`, below) has finished
+    // unregistering its channel, `supabase.channel()` with the same topic
+    // can hand back that old, already-subscribed channel object instead of
+    // a fresh one — and calling `.on()` on an already-subscribed channel
+    // throws "cannot add `postgres_changes` callbacks... after `subscribe()`".
+    // Confirmed happening in practice via Fast Refresh during dev (each
+    // reload re-runs this effect before the prior cleanup's unsubscribe
+    // round-trip completes), but the same race is possible on a real device
+    // on a fast remount (e.g. rapid navigation), so this isn't a dev-only
+    // patch. Removing any stale channel with this exact topic first
+    // guarantees `supabase.channel()` below always returns a genuinely new,
+    // not-yet-subscribed object.
+    const topic = `realtime:alerts:doctor:${resolvedDoctorId}`;
+    const stale = supabase.getChannels().find((c) => c.topic === topic);
+    if (stale) supabase.removeChannel(stale);
 
     // Live updates for this doctor's own alerts only — filtered server-side,
     // same boundary "alerts: doctor full access to own" already enforces on
@@ -113,5 +146,19 @@ export function useAlerts(doctorId?: string): { data: Alert[]; isLoading: boolea
     };
   }, [resolvedDoctorId]);
 
-  return { data, isLoading, error: null };
+  // Optimistic: the "Unread" badge has to change the instant the row is
+  // expanded, not a round-trip later. The Realtime UPDATE handler above will
+  // also deliver this same change and simply re-apply an identical value.
+  const markRead = useCallback((alertId: string) => {
+    const target = dataRef.current.find((a) => a.id === alertId);
+    if (!target || target.read) return; // already read — don't write again
+
+    const next = dataRef.current.map((a) => (a.id === alertId ? { ...a, read: true } : a));
+    dataRef.current = next;
+    setData(next);
+
+    markAlertRead(alertId);
+  }, []);
+
+  return { data, isLoading, error: null, markRead };
 }

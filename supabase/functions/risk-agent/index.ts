@@ -463,6 +463,31 @@ Deno.serve(async (req: Request) => {
     // vulnerable person. The conversationId in `data` is not shown on the lock
     // screen; it only reaches the app once opened.
     try {
+      // Notification preference gate — around the PUSH ONLY, exactly as
+      // _shared/doctorAlert.ts gates the doctor's. The chat_messages row above
+      // is already saved and the message still appears in the patient's chat
+      // the next time they open it: muting this silences the interruption,
+      // never the message itself.
+      //
+      // callerClient is correct here (unlike in doctorAlert, which needs the
+      // service role): the row being read is the CALLER'S OWN profile, which
+      // 0001's "profiles: self read" policy already permits — the same reason
+      // the push_tokens read below stays on callerClient.
+      //
+      // Fails OPEN, same as doctorAlert: a failed lookup still sends.
+      const { data: prefs, error: prefsError } = await callerClient
+        .from('profiles')
+        .select('notify_patient_agent_message')
+        .eq('id', patientId)
+        .single();
+
+      if (prefsError) {
+        console.warn(`Patient notification preference lookup failed for ${patientId}: ${prefsError.message} — pushing anyway.`);
+      } else if (prefs && (prefs as { notify_patient_agent_message: boolean }).notify_patient_agent_message === false) {
+        console.log(`Patient push suppressed: ${patientId} has notify_patient_agent_message off (message still delivered to chat).`);
+        return { sent: true, language: lang ?? 'en' };
+      }
+
       const { data: tokens, error: tokensError } = await callerClient
         .from('push_tokens')
         .select('expo_push_token')

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { colors } from '../../constants/theme';
 
-/** Pagination dots for the 3-slide onboarding sequence. */
+/** Pagination dots for the onboarding sequence; `total` is caller-driven. */
 export function OnboardingDots({ total, activeIndex }: { total: number; activeIndex: number }) {
   return (
     <View className="flex-row items-center justify-center gap-2">

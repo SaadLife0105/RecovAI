@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../constants/theme';
 import { useActivityFeed, ActivityFeedItemType } from '../../lib/hooks/useActivityFeed';
-import { formatDateLabel, formatTime, toDeviceLocalIsoString } from '../../lib/formatDate';
+import { formatDateLabel, formatTime, formatTimestamp, toDeviceLocalIsoString } from '../../lib/formatDate';
 import { getMauritiusDateString } from '../../lib/mauritiusTime';
 import { SOSButton } from '../../components/sos/SOSButton';
 import { BottomTabBar } from '../../components/navigation/BottomTabBar';
@@ -22,6 +23,14 @@ const FILTERS: { label: string; type: ActivityFeedItemType | 'all' }[] = [
   { label: 'Alerts', type: 'alert' },
   { label: 'Journal', type: 'journal' },
 ];
+
+/** Device-local YYYY-MM-DD — matches how localized item timestamps are keyed below. */
+function toLocalDay(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function yesterdayOf(dateStr: string): string {
   const d = new Date(dateStr);
@@ -47,17 +56,25 @@ export default function History() {
   const { data: items, isLoading } = useActivityFeed();
   const loading = isLoading || DEV_FORCE_LOADING;
   const [activeFilter, setActiveFilter] = useState<ActivityFeedItemType | 'all'>('all');
+  // Accordion: one row expanded at a time. Pure expand/collapse, no side effects.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const filtered = activeFilter === 'all' ? items : items.filter((item) => item.type === activeFilter);
+  const typeFiltered = activeFilter === 'all' ? items : items.filter((item) => item.type === activeFilter);
 
   // Convert to device-local once, here, before it's used for anything —
   // both the day grouping below and the displayed time need the same
   // corrected value, or entries written between midnight and 4 AM
   // Mauritius time silently land in the wrong day's group.
-  const localized = filtered.map((item) => ({ ...item, timestamp: toDeviceLocalIsoString(item.timestamp) }));
+  const localized = typeFiltered.map((item) => ({ ...item, timestamp: toDeviceLocalIsoString(item.timestamp) }));
+
+  // Date filter composes with the type filter above, it doesn't replace it.
+  const selectedDay = selectedDate ? toLocalDay(selectedDate) : null;
+  const filtered = selectedDay ? localized.filter((item) => item.timestamp.slice(0, 10) === selectedDay) : localized;
 
   const groups: { date: string; items: typeof localized }[] = [];
-  for (const item of localized) {
+  for (const item of filtered) {
     const date = item.timestamp.slice(0, 10);
     const group = groups[groups.length - 1];
     if (group && group.date === date) {
@@ -73,8 +90,38 @@ export default function History() {
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 flex-row items-center justify-between">
             <Text className="text-2xl font-bold text-text-dark">History</Text>
-            <Ionicons name="calendar-outline" size={22} color={colors.textDark} />
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
+              accessibilityLabel="Jump to a date"
+              hitSlop={8}
+              className="h-9 w-9 items-center justify-center"
+            >
+              <Ionicons name="calendar-outline" size={22} color={selectedDate ? colors.primary : colors.textDark} />
+            </Pressable>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate ?? new Date()}
+              mode="date"
+              maximumDate={new Date()}
+              onChange={(event, selected) => {
+                setShowDatePicker(false);
+                if (event.type === 'set' && selected) setSelectedDate(selected);
+              }}
+            />
+          )}
+
+          {selectedDate && (
+            <Pressable
+              onPress={() => setSelectedDate(null)}
+              className="mt-3 flex-row items-center self-start rounded-full px-3 py-1.5"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text className="text-xs font-semibold text-white">{formatDateLabel(toLocalDay(selectedDate))}</Text>
+              <Ionicons name="close" size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+            </Pressable>
+          )}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4 -mx-5 px-5">
             <View className="flex-row gap-2">
@@ -123,23 +170,53 @@ export default function History() {
                 ))}
               </View>
             </View>
+          ) : groups.length === 0 ? (
+            <View className="mt-8 items-center px-4">
+              <Ionicons name="calendar-clear-outline" size={40} color={colors.textMuted} />
+              <Text className="mt-3 text-sm text-text-muted">
+                {selectedDate ? 'Nothing on this day' : 'Nothing matches this filter'}
+              </Text>
+            </View>
           ) : (
             groups.map((group) => (
               <View key={group.date} className="mt-5">
                 <Text className="mb-2 text-sm font-semibold text-text-dark">{dayLabel(group.date)}</Text>
-                {group.items.map((item) => (
-                  <Pressable key={item.id} className="mb-3 flex-row items-center rounded-2xl bg-card p-3">
-                    <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: item.iconBg }}>
-                      <Ionicons name={item.icon} size={18} color={item.iconColor} />
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text className="text-sm font-semibold text-text-dark">{item.title}</Text>
-                      <Text className="mt-0.5 text-xs text-text-muted">{item.subtitle}</Text>
-                    </View>
-                    <Text className="ml-2 text-xs text-text-muted">{formatTime(item.timestamp)}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 8 }} />
-                  </Pressable>
-                ))}
+                {group.items.map((item) => {
+                  const isExpanded = expandedId === item.id;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => setExpandedId(isExpanded ? null : item.id)}
+                      className="mb-3 rounded-2xl bg-card p-3"
+                    >
+                      <View className="flex-row items-center">
+                        <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: item.iconBg }}>
+                          <Ionicons name={item.icon} size={18} color={item.iconColor} />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <Text className="text-sm font-semibold text-text-dark">{item.title}</Text>
+                          <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={isExpanded ? undefined : 1}>
+                            {item.subtitle}
+                          </Text>
+                        </View>
+                        <Text className="ml-2 text-xs text-text-muted">{formatTime(item.timestamp)}</Text>
+                        <Ionicons
+                          name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+                          size={16}
+                          color={colors.textMuted}
+                          style={{ marginLeft: 8 }}
+                        />
+                      </View>
+
+                      {isExpanded && (
+                        <View className="mt-3 border-t border-divider pt-3">
+                          <Text className="text-xs font-semibold text-text-dark">When</Text>
+                          <Text className="mt-1 text-xs text-text-muted">{formatTimestamp(item.timestamp)}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
               </View>
             ))
           )}

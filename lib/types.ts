@@ -45,6 +45,13 @@ export interface Profile {
   assignedDoctorId: string | null;
   archived: boolean;
   sobrietyStartDate: string | null; // ISO date
+  /** One of lib/avatarOptions.ts's 8 keys; null for accounts that never saw the avatar step. */
+  avatarKey: string | null;
+  /** Real contact email captured during onboarding — NOT the synthetic auth identity email. */
+  contactEmail: string | null;
+  /** Shared across roles: a patient's own number, or a doctor's number shown to their patients. */
+  phone: string | null;
+  dateOfBirth: string | null; // ISO date
 }
 
 export interface PatientSubstance {

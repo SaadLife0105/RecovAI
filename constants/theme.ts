@@ -70,6 +70,14 @@ export const colors = {
   zoneFriendsHouse: '#F97316',
   zoneFriendsHouseBg: '#FFF7ED',
   zoneFriendsHouseText: '#C2410C',
+
+  // Avatar-picker hues (lib/avatarOptions.ts) — the 8 patient avatars need 8
+  // visually distinct colors and the palette above only holds ~5 genuinely
+  // distinct ones. All three clear 4.5:1 against white, since the avatar
+  // renders as a white icon on a solid circle of its own color.
+  avatarPurple: '#7C3AED',
+  avatarPink: '#DB2777',
+  avatarCyan: '#0E7490',
 } as const;
 
 export const spacing = {

@@ -10,9 +10,9 @@ import { useToast } from '../../components/toast/ToastProvider';
 import { usePatientProfile } from '../../lib/hooks/usePatientProfile';
 import { useStreak } from '../../lib/hooks/useStreak';
 import { useCheckIns } from '../../lib/hooks/useCheckIns';
-import { PATIENT_PREFERENCES } from '../../lib/mockData';
 import { supabase } from '../../lib/supabase';
 import { daysBetween, getMauritiusDateString } from '../../lib/mauritiusTime';
+import { findAvatarOption } from '../../lib/avatarOptions';
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -51,12 +51,18 @@ export default function PatientProfile() {
     { icon: 'stats-chart-outline', label: 'Avg Risk Score', value: avgRiskScoreLabel },
   ];
 
-  const settingsRows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; route?: '/(patient)/change-password'; danger?: boolean }[] = [
-    { icon: 'alarm-outline', label: 'Check-in Reminder', value: PATIENT_PREFERENCES.checkInReminderTime },
+  const settingsRows: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; route?: '/(patient)/change-password' | '/(patient)/notification-preferences' | '/(patient)/edit-profile' | '/(patient)/privacy-info'; danger?: boolean }[] = [
+    { icon: 'notifications-outline', label: 'Reminders & Notifications', route: '/(patient)/notification-preferences' },
+    { icon: 'create-outline', label: 'Edit Profile', route: '/(patient)/edit-profile' },
+    { icon: 'shield-outline', label: 'Privacy & Data', route: '/(patient)/privacy-info' },
     { icon: 'lock-closed-outline', label: 'Change Password', route: '/(patient)/change-password' },
-    { icon: 'notifications-outline', label: 'Notification Preferences', value: PATIENT_PREFERENCES.notificationsEnabled ? 'Enabled' : 'Disabled' },
     { icon: 'log-out-outline', label: 'Log Out', danger: true },
   ];
+
+  // Null for every account created before the avatar step existed
+  // (onboarding_completed defaults true, so they never see it) — those keep
+  // the original initials circle.
+  const avatar = findAvatarOption(profile.avatarKey);
 
   const initials = profile.fullName
     .split(' ')
@@ -68,19 +74,21 @@ export default function PatientProfile() {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <View className="flex-1">
         <ScrollView contentContainerClassName="px-5 pb-10" showsVerticalScrollIndicator={false}>
-          <View className="mt-2 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <View className="h-14 w-14 items-center justify-center rounded-full" style={{ backgroundColor: colors.primary }}>
+          <View className="mt-2 flex-row items-center">
+            <View
+              className="h-14 w-14 items-center justify-center rounded-full"
+              style={{ backgroundColor: avatar?.color ?? colors.primary }}
+            >
+              {avatar ? (
+                <Ionicons name={avatar.icon} size={28} color="#FFFFFF" />
+              ) : (
                 <Text className="text-base font-bold text-white">{initials}</Text>
-              </View>
-              <View className="ml-3">
-                <Text className="text-lg font-bold text-text-dark">{profile.fullName}</Text>
-                <Text className="text-sm text-text-muted">{capitalize(profile.role)}</Text>
-              </View>
+              )}
             </View>
-            <Pressable onPress={() => router.push('/(patient)/edit-profile')} accessibilityLabel="Edit profile and settings" hitSlop={12}>
-              <Ionicons name="settings-outline" size={22} color={colors.textDark} />
-            </Pressable>
+            <View className="ml-3">
+              <Text className="text-lg font-bold text-text-dark">{profile.fullName}</Text>
+              <Text className="text-sm text-text-muted">{capitalize(profile.role)}</Text>
+            </View>
           </View>
 
           <View className="mt-4 flex-row gap-3">
@@ -89,6 +97,9 @@ export default function PatientProfile() {
               <Ionicons name="person-outline" size={22} color={colors.textMuted} />
               <Text className="mt-1 text-xs text-text-muted">Assigned Doctor</Text>
               <Text className="mt-1 text-sm font-bold text-text-dark">{profile.assignedDoctorName}</Text>
+              {profile.assignedDoctorPhone ? (
+                <Text className="mt-0.5 text-xs text-text-muted">{profile.assignedDoctorPhone}</Text>
+              ) : null}
             </View>
           </View>
 
@@ -124,6 +135,29 @@ export default function PatientProfile() {
               </Pressable>
             ))}
           </View>
+
+          {/* Non-dismissible on purpose: while a patient has no email of their
+              own, their doctor still holds the power to reset their password —
+              a real privacy consideration, not a cosmetic nudge. It stays until
+              the actual condition (a real email on file) is resolved. */}
+          {!profile.contactEmail ? (
+            <Pressable
+              onPress={() => router.push('/(patient)/edit-profile')}
+              className="mt-6 flex-row items-center rounded-2xl p-4"
+              style={{ backgroundColor: colors.riskMediumBg }}
+            >
+              <Ionicons name="mail-outline" size={20} color={colors.riskMediumText} />
+              <View className="ml-3 flex-1">
+                <Text className="text-sm font-semibold" style={{ color: colors.riskMediumText }}>
+                  Add your email address
+                </Text>
+                <Text className="mt-0.5 text-xs" style={{ color: colors.riskMediumText }}>
+                  Your account was set up by your doctor. Add an email so you can manage and reset your own password.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.riskMediumText} />
+            </Pressable>
+          ) : null}
         </ScrollView>
 
         <SOSButton />

@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/theme';
-import { SOSButton } from '../../components/sos/SOSButton';
 import { DoctorTabBar } from '../../components/navigation/DoctorTabBar';
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/hooks/useSession';
@@ -134,8 +133,6 @@ export default function AlertPreferences() {
             </View>
           )}
         </ScrollView>
-
-        <SOSButton />
 
         <DoctorTabBar active="profile" />
       </View>

@@ -99,6 +99,26 @@ async function sendPatientReminder(
   patientId: string
 ): Promise<boolean> {
   try {
+    // Notification preference gate — around the PUSH ONLY, exactly as
+    // _shared/doctorAlert.ts gates the doctor's. The missed_checkin alert row
+    // has already been written by the caller and still reaches the doctor
+    // regardless: muting this silences the patient's own nudge, never the
+    // clinical record of the missed day.
+    //
+    // Fails OPEN, same as doctorAlert: a failed lookup still sends.
+    const { data: prefs, error: prefsError } = await serviceRoleClient
+      .from('profiles')
+      .select('notify_patient_missed_checkin')
+      .eq('id', patientId)
+      .single();
+
+    if (prefsError) {
+      console.warn(`Reminder preference lookup failed for patient ${patientId}: ${prefsError.message} — pushing anyway.`);
+    } else if (prefs && (prefs as { notify_patient_missed_checkin: boolean }).notify_patient_missed_checkin === false) {
+      console.log(`Reminder push suppressed: patient ${patientId} has notify_patient_missed_checkin off (alert row still created).`);
+      return false;
+    }
+
     const { data: tokens, error: tokensError } = await serviceRoleClient
       .from('push_tokens')
       .select('expo_push_token')

@@ -14,7 +14,7 @@ const TABS: { key: DoctorTabKey; label: string; icon: keyof typeof Ionicons.glyp
   { key: 'profile', label: 'Profile', icon: 'person-outline', route: '/(doctor)/profile' },
 ];
 
-/** Bottom tab bar shared by doctor screens. Dashboard is fully built; the rest link to placeholder screens. */
+/** Bottom tab bar shared by doctor screens. */
 export function DoctorTabBar({ active }: { active: DoctorTabKey }) {
   const router = useRouter();
 
@@ -23,7 +23,16 @@ export function DoctorTabBar({ active }: { active: DoctorTabKey }) {
       {TABS.map((tab) => {
         const isActive = tab.key === active;
         return (
-          <Pressable key={tab.key} onPress={() => router.push(tab.route)} className="flex-1 items-center">
+          <Pressable
+            key={tab.key}
+            // Tapping the tab you're already on used to re-push the same
+            // route, remounting the whole screen and refetching everything —
+            // felt like a full reload for no reason. No-op instead.
+            onPress={() => {
+              if (!isActive) router.push(tab.route);
+            }}
+            className="flex-1 items-center"
+          >
             <Ionicons name={tab.icon} size={22} color={isActive ? colors.secondary : colors.textMuted} />
             <Text className="mt-0.5 text-[10px]" style={{ color: isActive ? colors.secondary : colors.textMuted }}>
               {tab.label}

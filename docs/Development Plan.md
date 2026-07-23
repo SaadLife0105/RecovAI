@@ -164,7 +164,7 @@ The single most important vertical slice: **check-in → risk score → display*
 ### 3.3 Patient Detail (Screen 11)
 - [x] Full 7-day chart + dotted forecast + danger threshold line at 70 — built as a raw react-native-svg component (`RiskTrendChart.tsx`), not react-native-chart-kit, since chart-kit has no native dashed-line support (same reasoning already established for `MiniSparkline.tsx`)
 - [x] AI Explanation card, recent alerts list, private doctor notes, archive/restore
-- Scope note: only what this checklist actually lists was built. The Check-ins/Alerts/Zones/Reports tabs on this screen remain "Coming soon" — those aren't 3.3 items, they're later-phase work the UI mockup happened to scaffold early.
+- Scope note: only what this checklist actually lists was built at the time. The Check-ins/Alerts/Zones/Reports tabs on this screen were all "Coming soon" — those aren't 3.3 items, they're later-phase work the UI mockup happened to scaffold early. Since then Zones and Reports have both been fully built (Zones via its own dedicated screen; Reports as the itemized accordion on this screen), leaving only Check-ins and Alerts still showing the "Coming soon" placeholder.
 - AI Explanation card now shows a real alert's `xai_explanation` when one exists, or an honest neutral "coming soon" placeholder otherwise — the previous hardcoded text (fabricated "late-night phone usage" analysis, describing data the app doesn't even track) was replaced rather than left in place, independent of Phase 4's XAI function landing later.
 - New migration `0006_profiles_doctor_update_patient_policy.sql`: there was no RLS policy letting a doctor update a patient's `profiles` row at all until now (only self-update existed) — required for archive/restore. **Deployed and tested from a real doctor session** (archive + restore both confirmed to persist). Deployment needed a bookkeeping repair first — `0005` was already applied on the remote (from earlier manual RLS testing in Milestone 2) but wasn't marked as such in Supabase's migration history, so `db push` tried to reapply it and collided; fixed with `supabase migration repair --status applied 0005` (repairs tracking only, doesn't re-run SQL) before pushing 0006 cleanly.
 
@@ -322,7 +322,7 @@ None of the three required a new EAS build -- all are pure JavaScript/Edge-Funct
 
 ## Phase 6 — Automation, Reports & Polish (Week 9)
 
-- [x] **Weekly report Edge Function** on a Monday cron (Supabase Cron, Edge Function job type). **Design decision (2026-07-22): in-app only, no email.** The original "HTML email via Resend" line above is superseded — Resend/domain-verification infrastructure was considered and deliberately dropped in favour of a simpler, fully in-app Reports screen (Screen 14): per patient, aggregate 7-day avg risk score, compliance rate, alert count, zone breach count, generated automatically via `generate-weekly-reports` + a Supabase Cron job, viewed via a patient picker (empty by default, showing each patient's current risk status) rather than a combined all-patients view. See the dated Dissertation Alignment Check entry below.
+- [x] **Weekly report Edge Function** on a Monday cron (Supabase Cron, Edge Function job type). **Design decision (2026-07-22): in-app only, no email.** The original "HTML email via Resend" line above is superseded — Resend/domain-verification infrastructure was considered and deliberately dropped in favour of a simpler, fully in-app Reports screen (Screen 14): per patient, aggregate 7-day avg risk score, compliance rate, alert count, zone breach count, generated automatically via `generate-weekly-reports` + a Supabase Cron job, rather than a combined all-patients view. **Reworked 2026-07-22:** the screen no longer has a patient-picker step — it shows live current-week snapshot cards for every active patient directly, and tapping a patient's card opens their Patient Detail Reports tab for completed-week history. See the dated Dissertation Alignment Check entry below.
 - [x] **Missed check-in detection cron** — the Alerts mockup (Screen 13) shows "Check-in missed" alerts, but nothing generates them without a scheduled job. Daily Supabase Cron job (21:00 Mauritius time) via `generate-missed-checkin-alerts`, finding patients with no check-in for the day and writing an alert + a gentle patient push reminder. Verified deployed and running on schedule.
 - [x] Enforce doctor **notification preferences** at alert-send time (agent and threshold alerts must both check them, or the toggle is decorative). Built across three stages 2026-07-22: real persistence (new `notify_*` columns on `profiles`, replacing `alert-preferences.tsx`'s previous pure local state), enforcement inside `_shared/doctorAlert.ts` (mutes the push only, never the alert row itself — see the dated Dissertation Alignment Check entry below for the full account, including two entirely new alert types — Zone Breach and Predicted High Risk — built from scratch so all four toggles gate something real, and a live Realtime fix for the Alerts screen found along the way).
 - [x] Onboarding 3-screen walkthrough on first patient login. No mockup existed for this one (unlike every other Phase 6 item); built as a skippable 3-slide walkthrough gated by a new `profiles.onboarding_completed` column (defaults true, so existing accounts are never surprised by it — only genuinely new patients created via `create-patient` start false). Single decision point in `(patient)/_layout.tsx`, verified no redirect loop and no flash-of-wrong-screen.
@@ -332,14 +332,71 @@ None of the three required a new EAS build -- all are pure JavaScript/Edge-Funct
 
 ---
 
-## Phase 7 — System Testing & Demo Data (Week 10)
+## Phase 7 — System Testing, App-Wide Audit & Polish, Demo Data (Week 10)
 
-- [ ] **Unit tests**: risk engine, forecaster, streak logic (already written; finalise coverage report)
-- [ ] **Integration tests**: check-in → score → agent → alert end-to-end on a staging patient
-- [ ] **Security tests**: attempt cross-patient data access with a second account (prove RLS); confirm journal invisible to doctor; confirm no API keys in the app bundle
-- [ ] **Usability**: small informal walkthrough (3–5 people) with task completion + SUS questionnaire — gives the Testing chapter a human-evaluation dimension
-- [ ] **Demo dataset**: seed script creating ~5 synthetic patients with 14 days of varied check-in history (one stable, one deteriorating, one erratic, one zone-breacher, one non-compliant) so the dashboard, forecasts, and agent all have something meaningful to show in the viva demo. Make the trajectories *defensible, not arbitrary*: derive the day-to-day patterns from the digital-phenotyping literature (see `RecovAI_Data_Sources.md` §E) and follow the ChatThero principle (§G) of matching synthetic output to real clinical parameters. This turns "I made up data" into "I generated data grounded in published behavioural patterns"
-- [ ] Record a full demo run-through video as backup against live-demo failure
+**Reordered 2026-07-22.** A full app-wide real-vs-decorative audit (all ~26
+screens, patient + doctor + auth) was conducted at the start of this phase,
+followed by a triage session deciding what gets fixed, cut, or built new.
+The complete, checkbox-tracked list of findings and decisions lives in
+`docs/Final-Edits-and-Fixes.md` — this section records the resulting phase
+sequencing, not the individual items themselves.
+
+1. [x] **App-wide real-vs-decorative audit** (patient + doctor, all screens)
+       — done; see `docs/Final-Edits-and-Fixes.md` for the full findings list.
+2. [x] **Fix what's worth fixing from the audit** (`docs/Final-Edits-and-Fixes.md`).
+       Fully complete as of 2026-07-22 — six bundled Claude Code sessions
+       covered password/security, alerts, both profile rebuilds, Patient
+       Detail's Check-ins/Alerts/Zones tabs, real check-in
+       reminders/notification preferences, and (bundle six) journal/History
+       detail views, the patient tab bar's Check-In tab removal, and
+       History's date filter. Dark theme was scoped and deliberately cut
+       (see that file's own entry for why). Every item independently
+       re-verified against the actual changed files, not just against
+       Claude Code's summaries. Known-Issues.md's four open items (the
+       one-check-in-per-day decision, the background-location crash
+       verification, the offline check-in queue, and a new reminder-
+       permission edge case) remain deliberately deferred, tracked
+       separately — not part of this checklist item's scope.
+3. [ ] **Unit / integration / security tests** — run in parallel with steps
+       1–2, not blocking on them:
+       - **Unit tests**: risk engine, forecaster, streak logic (already
+         written; finalise coverage report)
+       - **Integration tests**: check-in → score → agent → alert end-to-end
+         on a staging patient
+       - **Security tests**: attempt cross-patient data access with a second
+         account (prove RLS); confirm journal invisible to doctor; confirm no
+         API keys in the app bundle
+4. [ ] **Visual/aesthetic pass** — screen-by-screen briefs (what's on each
+       screen and how it currently looks/behaves) → external design tool
+       (ChatGPT/Codex or similar), alongside `docs/mockups/` → translated back
+       into real style/layout changes here. No new features, no changed
+       behaviour — purely how it looks.
+5. [ ] **Usability testing**: small informal walkthrough (3–5 people) with
+       task completion + SUS questionnaire, run on the **post-redesign** UI
+       (after step 4) so real complaints reflect the app's final look rather
+       than a rougher intermediate state — gives the Testing chapter a
+       human-evaluation dimension.
+6. [ ] **The one EAS build**: standalone profile, bundling
+       `@react-native-community/netinfo` + `expo-print`/`expo-file-system`
+       together (rather than separate builds for each). Used for:
+       - (a) background-location crash verification via Android's built-in
+         bug report tool + terminal logs (Known-Issues.md's open item)
+       - (b) enabling the offline check-in queue + PDF export for weekly
+         reports (both previously deferred, Future Work section below)
+       Slotted in around step 2, since the offline-queue design notes
+       (Known-Issues.md) belong with the other fixes.
+7. [ ] **Demo dataset**: seed script creating ~5 synthetic patients with 14
+       days of varied check-in history (one stable, one deteriorating, one
+       erratic, one zone-breacher, one non-compliant) so the dashboard,
+       forecasts, and agent all have something meaningful to show in the
+       viva demo. Make the trajectories *defensible, not arbitrary*: derive
+       the day-to-day patterns from the digital-phenotyping literature (see
+       `RecovAI_Data_Sources.md` §E) and follow the ChatThero principle (§G)
+       of matching synthetic output to real clinical parameters. This turns
+       "I made up data" into "I generated data grounded in published
+       behavioural patterns."
+8. [ ] Record a full demo run-through video as backup against live-demo
+       failure — last, once the app reflects its final state.
 
 ---
 
@@ -559,31 +616,9 @@ Original design (Screen 8 mockup, Chapter 3) implies a single continuous chat th
 
 ### 2026-07-20 (superseded by the entry above) — Kreol Morisien chatbot support: documented limitation, not solved
 
-Attempted trilingual chat support (English/French/Kreol Morisien) via system-prompt
-engineering: explicit language-matching instruction, a domain glossary, and
-three native-speaker-authored (Sa'ad) worked examples. Live on-device testing
-found Claude Haiku's Kreol Morisien output drifting into Haitian Kreyol
-grammar — concretely, using "yo" (Haitian plural marker) instead of "bann"
-(Kreol Morisien's actual plural marker). Explicit disambiguation naming the
-specific languages and the exact grammatical tell, plus the worked examples,
-were added to rag-chat's system prompt but did not fully resolve it on
-retesting. Ruled out: Anthropic fine-tuning (not offered on the standard API;
-only available via a separate Amazon Bedrock enterprise setup, disproportionate
-for one feature). Deferred, not ruled out: a retrieval-based approach (native-
-speaker-authored Kreol response templates retrieved via the existing RAG
-pipeline instead of freely generated) — judged achievable but out of scope
-given the remaining timeline (Phase 5 agent + Phase 4.5 DeepEval still open).
+Attempted trilingual chat support (English/French/Kreol Morisien) via system-prompt engineering: explicit language-matching instruction, a domain glossary, and three native-speaker-authored (Sa'ad) worked examples. Live on-device testing found Claude Haiku's Kreol Morisien output drifting into Haitian Kreyol grammar — concretely, using "yo" (Haitian plural marker) instead of "bann" (Kreol Morisien's actual plural marker). Explicit disambiguation naming the specific languages and the exact grammatical tell, plus the worked examples, were added to rag-chat's system prompt but did not fully resolve it on retesting. Ruled out: Anthropic fine-tuning (not offered on the standard API; only available via a separate Amazon Bedrock enterprise setup, disproportionate for one feature). Deferred, not ruled out: a retrieval-based approach (native- speaker-authored Kreol response templates retrieved via the existing RAG pipeline instead of freely generated) — judged achievable but out of scope given the remaining timeline (Phase 5 agent + Phase 4.5 DeepEval still open).
 
-**Action for the dissertation (SUPERSEDED — do not use this paragraph; see the
-working solution documented above instead):** ~~a ready-to-use
-Limitations-section paragraph covering this... was drafted in chat on
-2026-07-20~~. That draft is obsolete now that the feature works; the citation
-to Seetul (2024) AgriMoris is no longer needed for a limitations argument
-since there is no limitation to document, but the source may still be useful
-background for the multilingual-support Design/Analysis discussion generally
-(their chatbot also targeted English/French/Kreol Morisien, via a different
-model and without documenting how they handled — or avoided — the Haitian/
-Mauritian confusion this session found and fixed).
+**Action for the dissertation (SUPERSEDED — do not use this paragraph; see the working solution documented above instead):** ~~a ready-to-use Limitations-section paragraph covering this... was drafted in chat on 2026-07-20~~. That draft is obsolete now that the feature works; the citation to Seetul (2024) AgriMoris is no longer needed for a limitations argument since there is no limitation to document, but the source may still be useful background for the multilingual-support Design/Analysis discussion generally (their chatbot also targeted English/French/Kreol Morisien, via a different model and without documenting how they handled — or avoided — the Haitian/Mauritian confusion this session found and fixed).
 
 ### 2026-07-22 — Phase 6: weekly reports built in-app only, no email — one new chapter-facing decision, plus an open verification item
 
