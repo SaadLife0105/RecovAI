@@ -357,15 +357,31 @@ sequencing, not the individual items themselves.
        verification, the offline check-in queue, and a new reminder-
        permission edge case) remain deliberately deferred, tracked
        separately — not part of this checklist item's scope.
-3. [ ] **Unit / integration / security tests** — run in parallel with steps
-       1–2, not blocking on them:
-       - **Unit tests**: risk engine, forecaster, streak logic (already
-         written; finalise coverage report)
-       - **Integration tests**: check-in → score → agent → alert end-to-end
-         on a staging patient
-       - **Security tests**: attempt cross-patient data access with a second
-         account (prove RLS); confirm journal invisible to doctor; confirm no
-         API keys in the app bundle
+3. [x] **Unit / integration / security tests** — fully complete as of 2026-07-23.
+       - **Unit tests**: 5 suites (risk engine, forecaster, streak logic,
+         mauritiusTime, geo), 30/30 passing. Coverage captured and scoped
+         correctly (whole-project coverage would be misleading, since most
+         of this codebase is UI never meant to carry unit tests): riskEngine,
+         streakLogic, and geo all 100%; forecast 100% statements/83% branches;
+         mauritiusTime a genuine, disclosed outlier at 50% (only 2 of ~7
+         functions covered — noted honestly, not treated as blocking). See
+         `docs/Phase7-Unit-Test-Coverage.md`.
+       - **Secrets audit**: no service-role/Anthropic keys reach the client
+         bundle — see `docs/Phase7-Secrets-Audit.md`.
+       - **Security tests**: dedicated RLS fixture pair (second doctor +
+         patient), 11/11 pass covering patient-vs-patient, doctor-vs-doctor,
+         and — the core guarantee (NFR5) — journal invisibility even to the
+         patient's own assigned doctor. See `docs/Phase7-Security-Test-Results.md`.
+       - **Integration test**: real, live check-in → risk score → risk-agent
+         → alert pipeline, using a dedicated clean fixture patient and a
+         genuine (paid) Anthropic call. 6/6 pass; agent escalated to a
+         high-urgency doctor alert for a maximal-severity opioid check-in. A
+         real, disclosed first-attempt failure (invalid mood/sleep=0 inputs
+         hit a DB constraint before the agent ever ran — no cost incurred,
+         corrected to the nearest valid maximal input) and an incidental
+         second run (an unscoped coverage command accidentally re-triggered
+         it) that usefully demonstrated the agent's own alert-restraint logic
+         are both documented. See `docs/Phase7-Integration-Test-Results.md`.
 4. [ ] **Visual/aesthetic pass** — screen-by-screen briefs (what's on each
        screen and how it currently looks/behaves) → external design tool
        (ChatGPT/Codex or similar), alongside `docs/mockups/` → translated back
